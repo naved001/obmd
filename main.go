@@ -336,7 +336,7 @@ func main() {
 	chkfatal(err)
 	var config Config
 	chkfatal(json.Unmarshal(buf, &config))
-	srv := makeHandler(&config, nil) // TODO: supply a dialer
+	srv := makeHandler(&config, &DummyIpmiDialer{})
 	http.Handle("/", srv)
 	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
 }
