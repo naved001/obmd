@@ -31,7 +31,9 @@ type Config struct {
 
 // Ipmi connection info
 type IpmiInfo struct {
-	Addr, User, Pass string
+	Addr string `json:"addr"`
+	User string `json:"user"`
+	Pass string `json:"pass"`
 }
 
 // Information about a node
@@ -48,12 +50,12 @@ type Token [128 / 8]byte
 // Request body for the calls that include owner information.
 type OwnerArgs struct {
 	// Name of owner. Must not be "".
-	Owner string
+	Owner string `json:"owner"`
 }
 
 // Response body for successful new token requests.
 type TokenResp struct {
-	Token Token
+	Token Token `json:"token"`
 }
 
 // Global state; used to look up nodes/console tokens.
@@ -83,7 +85,11 @@ func (t Token) MarshalText() ([]byte, error) {
 }
 
 func (t *Token) UnmarshalText(text []byte) error {
-	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%0x", t)
+	buf := t[:]
+	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%32x", &buf)
+	if err != nil {
+		fmt.Printf("Failed to unmarshal from %q: %v", text, err)
+	}
 	return err
 }
 

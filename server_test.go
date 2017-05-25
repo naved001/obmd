@@ -1,13 +1,55 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
+
+// http.ResponseWriter that lets us stream a response during test.
+type responseStreamer struct {
+	code   int
+	header http.Header
+	body   io.WriteCloser
+}
+
+func (w responseStreamer) WriteHeader(code int) {
+	w.code = code
+}
+
+func (w responseStreamer) Header() http.Header {
+	return w.header
+}
+
+func (w responseStreamer) Write(p []byte) (n int, err error) {
+	if w.code == 0 {
+		w.WriteHeader(w.code)
+	}
+	return w.body.Write(p)
+}
+
+// handy type for specifying requests in data literals
+type requestSpec struct {
+	method, url, body string
+}
+
+// Convert the request spec to an unauthenticated http.Request
+func (r *requestSpec) toNoAuth() *http.Request {
+	return httptest.NewRequest(r.method, r.url, bytes.NewBuffer([]byte(r.body)))
+}
+
+// Convert the request spec to a request authenticated as admin.
+func (r *requestSpec) toAdminAuth() *http.Request {
+	req := r.toNoAuth()
+	req.SetBasicAuth("admin", theConfig.AdminToken)
+	return req
+}
 
 // Mock IpmiDialer for use in tests:
 type MockIpmiDialer struct {
@@ -29,9 +71,7 @@ func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (net.Conn, error) {
 }
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
-var adminRequests = []struct {
-	method, url, body string
-}{
+var adminRequests = []requestSpec{
 	{"PUT", "http://localhost:8080/node/somenode/owner", `{
 		"owner": "bob"
 	}`},
@@ -68,7 +108,7 @@ func TestAdminNoAuth(t *testing.T) {
 	handler := newHandler()
 
 	for i, v := range adminRequests {
-		req := httptest.NewRequest(v.method, v.url, bytes.NewBuffer([]byte(v.body)))
+		req := v.toNoAuth()
 		resp := httptest.NewRecorder()
 		handler.ServeHTTP(resp, req)
 		if resp.Result().StatusCode != 404 {
@@ -85,8 +125,7 @@ func TestAdminGoodAuth(t *testing.T) {
 	expected := []int{404, 200, 200, 200, 200, 404}
 
 	for i, v := range adminRequests {
-		req := httptest.NewRequest(v.method, v.url, bytes.NewBuffer([]byte(v.body)))
-		req.SetBasicAuth("admin", theConfig.AdminToken)
+		req := v.toAdminAuth()
 		resp := httptest.NewRecorder()
 		handler.ServeHTTP(resp, req)
 		actual := resp.Result().StatusCode
@@ -114,9 +153,7 @@ func TestOwnerRace(t *testing.T) {
 
 	// preliminary requests; a node is created, granted to bob, and then
 	// ownership is changed to alice.
-	requestSequence := []struct {
-		method, url, body string
-	}{
+	setupRequests := []requestSpec{
 		{"PUT", "http://localhost/node/somenode", `{
 			"addr": "10.0.0.3",
 			"user": "ipmiuser",
@@ -129,9 +166,8 @@ func TestOwnerRace(t *testing.T) {
 			"owner": "alice"
 		}`},
 	}
-	for i, v := range requestSequence {
-		req := httptest.NewRequest(v.method, v.url, bytes.NewBuffer([]byte(v.body)))
-		req.SetBasicAuth("admin", theConfig.AdminToken)
+	for i, v := range setupRequests {
+		req := v.toAdminAuth()
 		resp := httptest.NewRecorder()
 		handler.ServeHTTP(resp, req)
 		status := resp.Result().StatusCode
@@ -152,5 +188,101 @@ func TestOwnerRace(t *testing.T) {
 	handler.ServeHTTP(resp, req)
 	if resp.Result().StatusCode != http.StatusConflict {
 		t.Fatal("Owner mismatch did not result in an HTTP 409 CONFLICT.")
+	}
+}
+
+// Go through the motions of granting access to the console, viewing it, and then having access
+// revoked.
+func TestViewConsole(t *testing.T) {
+	handler := newHandler()
+
+	setupRequests := []requestSpec{
+		{"PUT", "http://localhost/node/somenode", `{
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}`},
+		{"PUT", "http://localhost/node/somenode/owner", `{
+			"owner": "bob"
+		}`},
+	}
+	for i, v := range setupRequests {
+		req := v.toAdminAuth()
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		status := resp.Result().StatusCode
+		if status != http.StatusOK {
+			t.Fatalf("During setup in TestViewConsole: Request #%d: %v failed with status %d.",
+				i, v, status)
+		}
+	}
+	req := (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
+		"owner": "bob"
+	}`}).toAdminAuth()
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	result := resp.Result()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("TestConsoleView: getting token failed with status %d.", result.StatusCode)
+	}
+	var respBody TokenResp
+	err := json.NewDecoder(result.Body).Decode(&respBody)
+	if err != nil {
+		t.Fatalf("Decoding body in TestViewConsole: %v", err)
+	}
+	textToken, err := respBody.Token.MarshalText()
+	if err != nil {
+		t.Fatalf("Formatting token in TestViewConsole: %v", err)
+	}
+
+	req = httptest.NewRequest(
+		"GET",
+		"http://localhost/node/somenode/console?token="+string(textToken),
+		bytes.NewBuffer(nil),
+	)
+
+	r, w := io.Pipe()
+	respStreamer := &responseStreamer{
+		header: make(http.Header),
+		body:   w,
+	}
+
+	go func() {
+		handler.ServeHTTP(respStreamer, req)
+		w.Close()
+	}()
+
+	bufReader := bufio.NewReader(r)
+	for i := 0; i < 10; i++ {
+		line, err := bufReader.ReadString('\n')
+		if err == io.EOF {
+			t.Logf("Request status: %d", respStreamer.code)
+		}
+		if err != nil {
+			t.Fatalf("Error reading from console: %v", err)
+		}
+		t.Log("Read from console: %q", line)
+		expected := `"10.0.0.3":"ipmiuser":"secret"` + "\n"
+		if line != expected {
+			t.Fatalf("Unexpected data read from console: %q", line)
+		}
+	}
+
+	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/owner", ""}).toAdminAuth()
+	resp = httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	status := resp.Result().StatusCode
+	if status != http.StatusOK {
+		t.Fatalf("ownership revocation request failed with status: %d", status)
+	}
+
+	// Clear out any buffered data:
+	bufReader.Discard(bufReader.Buffered())
+	// Now try to keep reading. This should fail; we should have been disconnected by the
+	// DELETE request.
+	_, err = bufReader.ReadByte()
+	if err == nil {
+		t.Fatal("Connection should have been closed, but we were able to successfully " +
+			"read data.")
 	}
 }
