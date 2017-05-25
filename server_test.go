@@ -277,11 +277,19 @@ func TestViewConsole(t *testing.T) {
 
 	// Clear out any buffered data:
 	bufReader.Discard(bufReader.Buffered())
-	// Now try to keep reading. This should fail; we should have been disconnected by the
-	// DELETE request.
-	_, err = bufReader.ReadByte()
+	// Now try to keep reading. The first of these *might* succeed, since the mock console
+	// goroutine may have made a call to write that we didn't match with a read before the
+	// server called Close(). But the second one should always fail; we should have been
+	// disconnected by the DELETE request, and the mock console goroutine should have seen
+	// it on its next call to Write.
+	line, err := bufReader.ReadString('\n')
+	if err != nil {
+		t.Logf("Read another line (%q) after the connection was closed; "+
+			"no cause for alarm.", line)
+	}
+	line, err = bufReader.ReadString('\n')
 	if err == nil {
-		t.Fatal("Connection should have been closed, but we were able to successfully " +
-			"read data.")
+		t.Fatalf("Connection should have been closed, but we were able to successfully "+
+			"read data: %q", line)
 	}
 }
