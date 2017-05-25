@@ -182,7 +182,7 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 
 	// Register a new node, or update the information in an existing one.
 	adminR.Methods("PUT").Path("/node/{node_id}").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
 			println("update node")
 			node := Node{}
 			err := json.NewDecoder(req.Body).Decode(&node.Ipmi)
@@ -198,7 +198,21 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 			} else {
 				state.Nodes[nodeId] = &node
 			}
-		})
+		}))
+
+	// Delete/unregister a node.
+	adminR.Methods("DELETE").Path("/node/{node_id}").
+		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
+			nodeId := mux.Vars(req)["node_id"]
+			node, ok := state.Nodes[nodeId]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			node.Disconnect()
+			node.ClearToken()
+			delete(state.Nodes, nodeId)
+		}))
 
 	// Change the owner of a node
 	adminR.Methods("PUT").Path("/node/{node_id}/owner").
