@@ -43,6 +43,9 @@ var adminRequests = []struct {
 	{"PUT", "http://localhost:8080/node/somenode/owner", `{
 		"owner": "bob"
 	}`},
+	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
+		"owner": "bob"
+	}`},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
 	{"PUT", "http://localhost:8080/node/somenode/owner", `{
 		"owner": "bob"
@@ -79,7 +82,7 @@ func TestAdminNoAuth(t *testing.T) {
 func TestAdminGoodAuth(t *testing.T) {
 	handler := newHandler()
 
-	expected := []int{404, 200, 200, 200, 404}
+	expected := []int{404, 200, 200, 200, 200, 404}
 
 	for i, v := range adminRequests {
 		req := httptest.NewRequest(v.method, v.url, bytes.NewBuffer([]byte(v.body)))
