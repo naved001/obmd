@@ -183,7 +183,6 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 	// Register a new node, or update the information in an existing one.
 	adminR.Methods("PUT").Path("/node/{node_id}").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			println("update node")
 			node := Node{}
 			err := json.NewDecoder(req.Body).Decode(&node.Ipmi)
 			if err != nil {
@@ -217,7 +216,6 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 	// Change the owner of a node
 	adminR.Methods("PUT").Path("/node/{node_id}/owner").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			println("new owner")
 			nodeId := mux.Vars(req)["node_id"]
 			node, ok := state.Nodes[nodeId]
 			if !ok {
@@ -237,7 +235,6 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 	// Remove the owner of a node
 	adminR.Methods("DELETE").Path("/node/{node_id}/owner").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			println("delete owner")
 			node, ok := state.Nodes[mux.Vars(req)["node_id"]]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
@@ -249,7 +246,6 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 	// Get a new console token
 	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			println("new token")
 			node, ok := state.Nodes[mux.Vars(req)["node_id"]]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
@@ -276,7 +272,6 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 	// Connect to the console. This is the one thing that doesn't require the admin token.
 	r.Methods("GET").Path("/node/{node_id}/console").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			println("use token")
 			// We don't use withLock here, since we want to
 			// release the lock before returning.
 			var token Token
