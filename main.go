@@ -85,12 +85,13 @@ func (t Token) MarshalText() ([]byte, error) {
 }
 
 func (t *Token) UnmarshalText(text []byte) error {
-	buf := t[:]
+	var buf []byte
 	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%32x", &buf)
 	if err != nil {
-		fmt.Printf("Failed to unmarshal from %q: %v", text, err)
+		return err
 	}
-	return err
+	copy(t[:], buf)
+	return nil
 }
 
 // Updates the owner of the node, disconnecting any existing connections and
