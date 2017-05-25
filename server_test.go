@@ -93,3 +93,61 @@ func TestAdminGoodAuth(t *testing.T) {
 		}
 	}
 }
+
+// This tests for correct mitigation of a race condition where a daemon acting on behalf of an
+// admin has two handlers being executed in parallel: one that revokes or changes access to a
+// node, and one that creates a console access token for it. The race condition in question is:
+//
+// 1. Console-token granting admin handler verifies credentials of its user
+// 2. Access-revoking admin handler revokes access
+// 3. Console-token granting admin handler generates an access token, and returns it to the
+//    user, granting access to a node that should have been revoked.
+//
+// We mitigate this by including the owner that the admin handler believes is correct as
+// part of the token granting request; step (2) will have changed the owner, and so the
+// console server will detect the descrepency, rejecting the request.
+func TestOwnerRace(t *testing.T) {
+	handler := newHandler()
+
+	// preliminary requests; a node is created, granted to bob, and then
+	// ownership is changed to alice.
+	requestSequence := []struct {
+		method, url, body string
+	}{
+		{"PUT", "http://localhost/node/somenode", `{
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}`},
+		{"PUT", "http://localhost/node/somenode/owner", `{
+			"owner": "bob"
+		}`},
+		{"PUT", "http://localhost/node/somenode/owner", `{
+			"owner": "alice"
+		}`},
+	}
+	for i, v := range requestSequence {
+		req := httptest.NewRequest(v.method, v.url, bytes.NewBuffer([]byte(v.body)))
+		req.SetBasicAuth("admin", theConfig.AdminToken)
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		status := resp.Result().StatusCode
+		if status != http.StatusOK {
+			t.Fatalf("During setup in TestOwnerRace: Request #%d: %v failed with status %d.",
+				i, v, status)
+		}
+	}
+
+	// Now, try to request a token with bob as the expected owner. This should fail with a 409
+	// CONFLICT status.
+	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
+		bytes.NewBuffer([]byte(`{
+			"owner": "bob"
+		}`)))
+	req.SetBasicAuth("admin", theConfig.AdminToken)
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	if resp.Result().StatusCode != http.StatusConflict {
+		t.Fatal("Owner mismatch did not result in an HTTP 409 CONFLICT.")
+	}
+}

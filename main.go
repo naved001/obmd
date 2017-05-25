@@ -254,6 +254,12 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 			args := OwnerArgs{}
 			err := json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if args.Owner != node.Owner {
+				// Client is mistaken about who owns the node; make them try
+				// again after regaining their bearings.
 				w.WriteHeader(http.StatusConflict)
 				return
 			}
