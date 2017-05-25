@@ -314,6 +314,7 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 
 				// OK, auth checks out; make the connection.
 				Conn, err = node.Connect(dialer)
+				node.Conn = Conn
 				return err == nil
 			}() {
 				// Something in the critical section failed; bail out.
