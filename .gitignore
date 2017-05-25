@@ -1,0 +1,8 @@
+# The executable:
+/console-service
+
+# default path for the config file:
+/config.json
+
+# vim swap files:
+*.swp
