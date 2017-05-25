@@ -261,7 +261,6 @@ func TestViewConsole(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error reading from console: %v", err)
 		}
-		t.Log("Read from console: %q", line)
 		expected := `"10.0.0.3":"ipmiuser":"secret"` + "\n"
 		if line != expected {
 			t.Fatalf("Unexpected data read from console: %q", line)
