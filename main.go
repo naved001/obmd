@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"sync"
 
@@ -20,7 +19,7 @@ import (
 // An IpmiDialer establishes a connection to a console based on an IpmiInfo
 // struct. This is an interface for testing purposes.
 type IpmiDialer interface {
-	DialIpmi(info *IpmiInfo) (net.Conn, error)
+	DialIpmi(info *IpmiInfo) (io.ReadWriteCloser, error)
 }
 
 // Contents of the config file
@@ -40,8 +39,8 @@ type IpmiInfo struct {
 type Node struct {
 	Owner        string
 	Ipmi         IpmiInfo
-	Conn         net.Conn // Active console connection, if any.
-	CurrentToken Token    // Token for console access.
+	Conn         io.ReadWriteCloser // Active console connection, if any.
+	CurrentToken Token              // Token for console access.
 }
 
 // A cryptographically random 128-bit value.
@@ -147,10 +146,9 @@ func (n *Node) Disconnect() {
 
 // Connect to the node's console using `dialer`. Disconnect any previously existing
 // connection.
-func (n *Node) Connect(dialer IpmiDialer) (net.Conn, error) {
+func (n *Node) Connect(dialer IpmiDialer) (io.ReadWriteCloser, error) {
 	// Disconnect the old client, if any.
 	n.Disconnect()
-
 	return dialer.DialIpmi(&n.Ipmi)
 }
 
@@ -294,7 +292,7 @@ func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
 				return
 			}
 
-			var Conn net.Conn
+			var Conn io.ReadWriteCloser
 
 			if !func() bool {
 				// Wrapping this in a function and using defer simplifies the
