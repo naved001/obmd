@@ -66,6 +66,8 @@ type State struct {
 var (
 	configPath = flag.String("config", "config.json", "Path to config file")
 
+	dummyDialer = flag.Bool("dummydialer", false, "Use dummy dialer (for development)")
+
 	// A dummy token to be used when there is no "valid" token. This is
 	// generated in init(), and never escapes the program. It exists so
 	// we don't have to have special purpose logic for the case where
@@ -334,7 +336,13 @@ func main() {
 	chkfatal(err)
 	var config Config
 	chkfatal(json.Unmarshal(buf, &config))
-	srv := makeHandler(&config, &DummyIpmiDialer{})
+	var dialer IpmiDialer
+	if *dummyDialer {
+		dialer = &DummyIpmiDialer{}
+	} else {
+		dialer = &IpmitoolDialer{}
+	}
+	srv := makeHandler(&config, dialer)
 	http.Handle("/", srv)
 	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
 }
