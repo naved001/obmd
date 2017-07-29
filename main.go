@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // An IpmiDialer establishes a connection to a console based on an IpmiInfo
@@ -64,9 +67,9 @@ type State struct {
 }
 
 var (
-	configPath = flag.String("config", "config.json", "Path to config file")
-
+	configPath  = flag.String("config", "config.json", "Path to config file")
 	dummyDialer = flag.Bool("dummydialer", false, "Use dummy dialer (for development)")
+	dbPath      = flag.String("dbpath", ":memory:", "Path to sqlite database")
 
 	// A dummy token to be used when there is no "valid" token. This is
 	// generated in init(), and never escapes the program. It exists so
@@ -163,7 +166,7 @@ func chkfatal(err error) {
 
 // Create an HTTP handler for the core logic of our system, using the provided,
 // configuration and the dialer for establishing connections.
-func makeHandler(config *Config, dialer IpmiDialer) http.Handler {
+func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 
 	state := &State{
 		Nodes: make(map[string]*Node),
@@ -336,13 +339,18 @@ func main() {
 	chkfatal(err)
 	var config Config
 	chkfatal(json.Unmarshal(buf, &config))
+	db, err := sql.Open("sqlite3", *dbPath)
+	chkfatal(err)
+	chkfatal(db.Ping())
+
 	var dialer IpmiDialer
 	if *dummyDialer {
 		dialer = &DummyIpmiDialer{}
 	} else {
 		dialer = &IpmitoolDialer{}
 	}
-	srv := makeHandler(&config, dialer)
+	chkfatal(initDB(db))
+	srv := makeHandler(&config, dialer, db)
 	http.Handle("/", srv)
 	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
 }
