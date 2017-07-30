@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,7 +100,11 @@ var theConfig = &Config{
 
 // Wraps makeHandler, passing testing-appropriate arguments
 func newHandler() http.Handler {
-	return makeHandler(theConfig, &MockIpmiDialer{})
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	return makeHandler(theConfig, &MockIpmiDialer{}, db)
 }
 
 // Verify: all admin-only requests should return 404 when made without
