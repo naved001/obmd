@@ -22,7 +22,7 @@ A Config file is needed, whose contents should look like:
 }
 ```
 
-The Admin token should be (cryptographically) randomly generated.
+The admin token should be (cryptographically) randomly generated.
 
 By default, the server looks for the config file at `./config.json`, but
 the `-config` command line option can be used to override this.
