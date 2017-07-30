@@ -14,17 +14,17 @@ type IpmitoolDialer struct {
 // A running ipmi process, connected to a serial console. It's Close() method
 // kills the process as well as closing it's attached pty.
 type ipmiProcess struct {
-	io.ReadWriteCloser
+	io.ReadCloser
 	proc *os.Process
 }
 
 func (p *ipmiProcess) Close() error {
 	p.proc.Kill()
 	p.proc.Wait()
-	return p.ReadWriteCloser.Close()
+	return p.ReadCloser.Close()
 }
 
-func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadWriteCloser, error) {
+func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	cmd := exec.Command(
 		"ipmitool",
 		"-I", "lanplus",
@@ -38,7 +38,7 @@ func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadWriteCloser, error) {
 		return nil, err
 	}
 	return &ipmiProcess{
-		ReadWriteCloser: stdio,
-		proc:            cmd.Process,
+		ReadCloser: stdio,
+		proc:       cmd.Process,
 	}, nil
 }

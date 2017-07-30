@@ -58,7 +58,7 @@ type MockIpmiDialer struct {
 
 // Connect to a mock console stream. It just writes "addr":"user":"pass" in a
 // loop until the connection is closed.
-func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadWriteCloser, error) {
+func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	myConn, theirConn := net.Pipe()
 
 	go func() {

@@ -13,7 +13,7 @@ import (
 type DummyIpmiDialer struct {
 }
 
-func (d *DummyIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadWriteCloser, error) {
+func (d *DummyIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	conn, err := net.Dial("tcp", info.Addr)
 	if err != nil {
 		return nil, err
