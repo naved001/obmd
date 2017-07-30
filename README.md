@@ -1,3 +1,5 @@
+[![Build Status][travis-img]][travis]
+
 Prototype implementation of the console daemon described at:
 
 <https://github.com/CCI-MOC/hil/issues/417#issuecomment-303564763>
@@ -120,3 +122,6 @@ Notes:
   be used beyond initializing a schema.
 
 [1]: https://golang.org/pkg/net/#Dial
+
+[travis]: https://travis-ci.org/zenhack/console-service
+[travis-img]: https://travis-ci.org/zenhack/console-service.svg?branch=master
