@@ -164,7 +164,7 @@ func chkfatal(err error) {
 	}
 }
 
-// Create an HTTP handler for the core logic of our system, using the provided,
+// Create an HTTP handler for the core logic of our system, using the provided
 // configuration and the dialer for establishing connections.
 func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 
