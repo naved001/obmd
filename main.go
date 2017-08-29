@@ -40,7 +40,7 @@ type IpmiInfo struct {
 
 // Information about a node
 type Node struct {
-	Owner        string
+	Version      uint64
 	Ipmi         IpmiInfo
 	Conn         io.ReadCloser // Active console connection, if any.
 	CurrentToken Token         // Token for console access.
@@ -49,10 +49,21 @@ type Node struct {
 // A cryptographically random 128-bit value.
 type Token [128 / 8]byte
 
-// Request body for the calls that include owner information.
-type OwnerArgs struct {
-	// Name of owner. Must not be "".
-	Owner string `json:"owner"`
+// Request/response body for the calls that include version information.
+type VersionArgs struct {
+	// Expected version number.
+	Version uint64 `json:"version"`
+}
+
+// Convert v to JSON. This is a convienence wrapper around json.Marshal,
+// which returns an error even though for this data type it can't ever
+// fail.
+func (v VersionArgs) asJson() []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic("BUG: json marshaling failed: " + err.Error())
+	}
+	return data
 }
 
 // Response body for successful new token requests.
@@ -98,16 +109,16 @@ func (t *Token) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// Updates the owner of the node, disconnecting any existing connections and
+// Bumps the version of the node, disconnecting any existing connections and
 // invalidating any tokens.
-func (n *Node) UpdateOwner(newOwner string) {
+func (n *Node) BumpVersion() {
 	n.ClearToken()
 	n.Disconnect()
-	n.Owner = newOwner
+	n.Version++
 }
 
-// Returns a new node with the given ipmi information, no owner, and no valid
-// token.
+// Returns a new node with the given ipmi information, at version 0, with no
+// valid token.
 func NewNode(info IpmiInfo) *Node {
 	ret := &Node{
 		Ipmi: info,
@@ -193,19 +204,20 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 	// Register a new node, or update the information in an existing one.
 	adminR.Methods("PUT").Path("/node/{node_id}").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			node := Node{}
-			err := json.NewDecoder(req.Body).Decode(&node.Ipmi)
+			var info IpmiInfo
+			err := json.NewDecoder(req.Body).Decode(&info)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			nodeId := mux.Vars(req)["node_id"]
-			oldNode, ok := state.Nodes[nodeId]
 
+			nodeId := mux.Vars(req)["node_id"]
+			node, ok := state.Nodes[nodeId]
 			if ok {
-				*oldNode = node
+				node.Ipmi = info
+				node.BumpVersion()
 			} else {
-				state.Nodes[nodeId] = &node
+				state.Nodes[nodeId] = NewNode(info)
 			}
 		}))
 
@@ -223,8 +235,8 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 			delete(state.Nodes, nodeId)
 		}))
 
-	// Change the owner of a node
-	adminR.Methods("PUT").Path("/node/{node_id}/owner").
+	// Bump the version of a node.
+	adminR.Methods("POST").Path("/node/{node_id}/version").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
 			nodeId := mux.Vars(req)["node_id"]
 			node, ok := state.Nodes[nodeId]
@@ -232,25 +244,8 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-
-			args := OwnerArgs{}
-			err := json.NewDecoder(req.Body).Decode(&args)
-			if err != nil || args.Owner == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			node.UpdateOwner(args.Owner)
-		}))
-
-	// Remove the owner of a node
-	adminR.Methods("DELETE").Path("/node/{node_id}/owner").
-		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			node, ok := state.Nodes[mux.Vars(req)["node_id"]]
-			if !ok {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			node.UpdateOwner("")
+			node.BumpVersion()
+			w.Write(VersionArgs{Version: node.Version}.asJson())
 		}))
 
 	// Get a new console token
@@ -261,16 +256,20 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			args := OwnerArgs{}
+			args := VersionArgs{}
 			err := json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			if args.Owner != node.Owner {
-				// Client is mistaken about who owns the node; make them try
-				// again after regaining their bearings.
+			if args.Version != node.Version {
+				// Client is mistaken about the version the
+				// node; give them the correct version and
+				// make them try again after regaining
+				// their bearings:
+				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusConflict)
+				w.Write(VersionArgs{Version: node.Version}.asJson())
 				return
 			}
 			token, err := node.NewToken()

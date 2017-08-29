@@ -73,24 +73,18 @@ func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
 var adminRequests = []requestSpec{
-	{"PUT", "http://localhost:8080/node/somenode/owner", `{
-		"owner": "bob"
-	}`},
+	{"POST", "http://localhost:8080/node/somenode/version", ""},
 	{"PUT", "http://localhost:8080/node/somenode", `{
 		"host": "10.0.0.3",
 		"user": "ipmiuser",
 		"pass": "secret"
 	}`},
-	{"PUT", "http://localhost:8080/node/somenode/owner", `{
-		"owner": "bob"
-	}`},
+	{"POST", "http://localhost:8080/node/somenode/version", ""},
 	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
-		"owner": "bob"
+		"version": 1
 	}`},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
-	{"PUT", "http://localhost:8080/node/somenode/owner", `{
-		"owner": "bob"
-	}`},
+	{"POST", "http://localhost:8080/node/somenode/owner", ""},
 }
 
 var theConfig = &Config{
@@ -150,26 +144,22 @@ func TestAdminGoodAuth(t *testing.T) {
 // 3. Console-token granting admin handler generates an access token, and returns it to the
 //    user, granting access to a node that should have been revoked.
 //
-// We mitigate this by including the owner that the admin handler believes is correct as
-// part of the token granting request; step (2) will have changed the owner, and so the
-// console server will detect the descrepency, rejecting the request.
+// We mitigate this by including a version number that the admin handler believes is
+// current part of the token granting request; step (2) will have changed the version,
+// and so the console server will detect the descrepency, rejecting the request.
 func TestOwnerRace(t *testing.T) {
 	handler := newHandler()
 
-	// preliminary requests; a node is created, granted to bob, and then
-	// ownership is changed to alice.
+	// preliminary requests; a node is created, and the version is bumped
+	// twice.
 	setupRequests := []requestSpec{
 		{"PUT", "http://localhost/node/somenode", `{
 			"addr": "10.0.0.3",
 			"user": "ipmiuser",
 			"pass": "secret"
 		}`},
-		{"PUT", "http://localhost/node/somenode/owner", `{
-			"owner": "bob"
-		}`},
-		{"PUT", "http://localhost/node/somenode/owner", `{
-			"owner": "alice"
-		}`},
+		{"POST", "http://localhost/node/somenode/version", ""},
+		{"POST", "http://localhost/node/somenode/version", ""},
 	}
 	for i, v := range setupRequests {
 		req := v.toAdminAuth()
@@ -182,17 +172,24 @@ func TestOwnerRace(t *testing.T) {
 		}
 	}
 
-	// Now, try to request a token with bob as the expected owner. This should fail with a 409
-	// CONFLICT status.
+	// Now, try to request a token with version 1 as the expected owner. This should
+	// fail with a 409 CONFLICT status, as the current version should be 2.
 	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
-		bytes.NewBuffer([]byte(`{
-			"owner": "bob"
-		}`)))
+		bytes.NewBuffer([]byte(`{"version": 1}`)))
 	req.SetBasicAuth("admin", theConfig.AdminToken)
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
-	if resp.Result().StatusCode != http.StatusConflict {
-		t.Fatal("Owner mismatch did not result in an HTTP 409 CONFLICT.")
+	result := resp.Result()
+	if result.StatusCode != http.StatusConflict {
+		t.Fatal("Version mismatch did not result in an HTTP 409 CONFLICT.")
+	}
+	version := VersionArgs{}
+	err := json.NewDecoder(result.Body).Decode(&version)
+	if err != nil {
+		t.Fatal("Error decoding body of response:", err)
+	}
+	if version.Version != 2 {
+		t.Fatal("Unexpected version number; expected 2 but got", version.Version)
 	}
 }
 
@@ -201,30 +198,25 @@ func TestOwnerRace(t *testing.T) {
 func TestViewConsole(t *testing.T) {
 	handler := newHandler()
 
-	setupRequests := []requestSpec{
-		{"PUT", "http://localhost/node/somenode", `{
+	spec := requestSpec{
+		"PUT", "http://localhost/node/somenode", `{
 			"addr": "10.0.0.3",
 			"user": "ipmiuser",
 			"pass": "secret"
-		}`},
-		{"PUT", "http://localhost/node/somenode/owner", `{
-			"owner": "bob"
-		}`},
+		}`,
 	}
-	for i, v := range setupRequests {
-		req := v.toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
-		status := resp.Result().StatusCode
-		if status != http.StatusOK {
-			t.Fatalf("During setup in TestViewConsole: Request #%d: %v failed with status %d.",
-				i, v, status)
-		}
-	}
-	req := (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
-		"owner": "bob"
-	}`}).toAdminAuth()
+	req := spec.toAdminAuth()
 	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	status := resp.Result().StatusCode
+	if status != http.StatusOK {
+		t.Fatalf("During setup in TestViewConsole: Request %v failed with status %d.",
+			spec, status)
+	}
+	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
+		"version": 0
+	}`}).toAdminAuth()
+	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	result := resp.Result()
 	if result.StatusCode != http.StatusOK {
@@ -272,12 +264,12 @@ func TestViewConsole(t *testing.T) {
 		}
 	}
 
-	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/owner", ""}).toAdminAuth()
+	req = (&requestSpec{"POST", "http://localhost/node/somenode/version", ""}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
-	status := resp.Result().StatusCode
+	status = resp.Result().StatusCode
 	if status != http.StatusOK {
-		t.Fatalf("ownership revocation request failed with status: %d", status)
+		t.Fatalf("version bump request failed with status: %d", status)
 	}
 
 	// Clear out any buffered data:
@@ -285,7 +277,7 @@ func TestViewConsole(t *testing.T) {
 	// Now try to keep reading. The first of these *might* succeed, since the mock console
 	// goroutine may have made a call to write that we didn't match with a read before the
 	// server called Close(). But the second one should always fail; we should have been
-	// disconnected by the DELETE request, and the mock console goroutine should have seen
+	// disconnected by the version bump, and the mock console goroutine should have seen
 	// it on its next call to Write.
 	line, err := bufReader.ReadString('\n')
 	if err != nil {

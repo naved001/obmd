@@ -39,7 +39,7 @@ Each admin operation requires the client to authenticate using basic
 auth, with a username of "admin" and a password equal to the
 "AdminToken" in the config file.
 
-### Registering a node
+### Registering or updating a node
 
 `PUT /node/{node_id}`
 
@@ -57,22 +57,22 @@ Notes:
 
 * The `node_id` is an arbitrary label.
 * The fields in the body of the request are passed directly to ipmitool
+* If the node already exists, the information will be updated.
 
-### Setting the owner of a node
+### Updating the version of a node
 
-`PUT /node/{node_id}/owner`
+`POST /node/{node_id}/version`
 
-Request body:
+Increment the version number of the node, disconnecting any existing
+clients and invalidating any tokens.  Returns the new version number.
+
+Response body:
 
 ```json
 {
-    "owner": "alice"
+    "version": 7
 }
 ```
-
-### Removing the owner of a node
-
-`DELETE /node/{node_id}/owner`
 
 ### Getting a new console token
 
@@ -82,7 +82,7 @@ Request body:
 
 ```json
 {
-    "owner": "alice"
+    "version": 3
 }
 ```
 
@@ -96,7 +96,7 @@ Response body:
 
 Notes:
 
-* The owner in the request must match the current owner of the node.
+* The version in the request must match the current version of the node.
 * The token in the response is to be used to view the console.
 
 ## Non-admin operations
