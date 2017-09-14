@@ -6,3 +6,7 @@
 
 # vim swap files:
 *.swp
+
+# SQLite databases:
+*.db
+*.sqlite3
