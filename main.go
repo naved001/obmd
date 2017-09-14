@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/gorilla/mux"
 
@@ -40,6 +39,7 @@ type IpmiInfo struct {
 
 // Information about a node
 type Node struct {
+	Label        string
 	Version      uint64
 	Ipmi         IpmiInfo
 	Conn         io.ReadCloser // Active console connection, if any.
@@ -69,12 +69,6 @@ func (v VersionArgs) asJson() []byte {
 // Response body for successful new token requests.
 type TokenResp struct {
 	Token Token `json:"token"`
-}
-
-// Global state; used to look up nodes/console tokens.
-type State struct {
-	sync.Mutex
-	Nodes map[string]*Node
 }
 
 var (
@@ -111,10 +105,14 @@ func (t *Token) UnmarshalText(text []byte) error {
 
 // Bumps the version of the node, disconnecting any existing connections and
 // invalidating any tokens.
-func (n *Node) BumpVersion() {
+func (n *Node) BumpVersion(db *sql.DB) error {
 	n.ClearToken()
 	n.Disconnect()
 	n.Version++
+	_, err := db.Exec(
+		`UPDATE nodes SET version = ? WHERE label = ?`,
+		n.Version, n.Label)
+	return err
 }
 
 // Returns a new node with the given ipmi information, at version 0, with no
@@ -177,10 +175,10 @@ func chkfatal(err error) {
 
 // Create an HTTP handler for the core logic of our system, using the provided
 // configuration and the dialer for establishing connections.
-func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
-
-	state := &State{
-		Nodes: make(map[string]*Node),
+func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, error) {
+	state, err := NewState(db)
+	if err != nil {
+		return nil, err
 	}
 
 	// Wrap a request handler with calls to state.Lock/state.Unlock
@@ -212,12 +210,11 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 			}
 
 			nodeId := mux.Vars(req)["node_id"]
-			node, ok := state.Nodes[nodeId]
-			if ok {
-				node.Ipmi = info
-				node.BumpVersion()
-			} else {
-				state.Nodes[nodeId] = NewNode(info)
+			_, err = state.SetNode(nodeId, info)
+			if err != nil {
+				log.Println("Error in SetNode():", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 		}))
 
@@ -225,39 +222,44 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 	adminR.Methods("DELETE").Path("/node/{node_id}").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
 			nodeId := mux.Vars(req)["node_id"]
-			node, ok := state.Nodes[nodeId]
-			if !ok {
+			node, err := state.GetNode(nodeId)
+			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 			node.Disconnect()
 			node.ClearToken()
-			delete(state.Nodes, nodeId)
+			state.DelNode(nodeId)
 		}))
 
 	// Bump the version of a node.
 	adminR.Methods("POST").Path("/node/{node_id}/version").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
 			nodeId := mux.Vars(req)["node_id"]
-			node, ok := state.Nodes[nodeId]
-			if !ok {
+			node, err := state.GetNode(nodeId)
+			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			node.BumpVersion()
+			err = node.BumpVersion(db)
+			if err != nil {
+				log.Println("Bumping version for node", nodeId, ":", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 			w.Write(VersionArgs{Version: node.Version}.asJson())
 		}))
 
 	// Get a new console token
 	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			node, ok := state.Nodes[mux.Vars(req)["node_id"]]
-			if !ok {
+			node, err := state.GetNode(mux.Vars(req)["node_id"])
+			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 			args := VersionArgs{}
-			err := json.NewDecoder(req.Body).Decode(&args)
+			err = json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -304,8 +306,8 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 				// section here.
 				state.Lock()
 				defer state.Unlock()
-				node, ok := state.Nodes[mux.Vars(req)["node_id"]]
-				if !ok {
+				node, err := state.GetNode(mux.Vars(req)["node_id"])
+				if err != nil {
 					w.WriteHeader(http.StatusNotFound)
 					return false
 				}
@@ -329,7 +331,7 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) http.Handler {
 			io.Copy(w, Conn)
 		})
 
-	return r
+	return r, nil
 }
 
 func main() {
@@ -348,8 +350,8 @@ func main() {
 	} else {
 		dialer = &IpmitoolDialer{}
 	}
-	chkfatal(initDB(db))
-	srv := makeHandler(&config, dialer, db)
+	srv, err := makeHandler(&config, dialer, db)
+	chkfatal(err)
 	http.Handle("/", srv)
 	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
 }

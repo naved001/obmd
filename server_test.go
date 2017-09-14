@@ -81,10 +81,10 @@ var adminRequests = []requestSpec{
 	}`},
 	{"POST", "http://localhost:8080/node/somenode/version", ""},
 	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
-		"version": 1
+		"version": 2
 	}`},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
-	{"POST", "http://localhost:8080/node/somenode/owner", ""},
+	{"POST", "http://localhost:8080/node/somenode/version", ""},
 }
 
 var theConfig = &Config{
@@ -98,7 +98,11 @@ func newHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	return makeHandler(theConfig, &MockIpmiDialer{}, db)
+	handler, err := makeHandler(theConfig, &MockIpmiDialer{}, db)
+	if err != nil {
+		panic(err)
+	}
+	return handler
 }
 
 // Verify: all admin-only requests should return 404 when made without
@@ -173,7 +177,7 @@ func TestOwnerRace(t *testing.T) {
 	}
 
 	// Now, try to request a token with version 1 as the expected owner. This should
-	// fail with a 409 CONFLICT status, as the current version should be 2.
+	// fail with a 409 CONFLICT status, as the current version should be 3.
 	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
 		bytes.NewBuffer([]byte(`{"version": 1}`)))
 	req.SetBasicAuth("admin", theConfig.AdminToken)
@@ -188,7 +192,7 @@ func TestOwnerRace(t *testing.T) {
 	if err != nil {
 		t.Fatal("Error decoding body of response:", err)
 	}
-	if version.Version != 2 {
+	if version.Version != 3 {
 		t.Fatal("Unexpected version number; expected 2 but got", version.Version)
 	}
 }
@@ -214,7 +218,7 @@ func TestViewConsole(t *testing.T) {
 			spec, status)
 	}
 	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
-		"version": 0
+		"version": 1
 	}`}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
