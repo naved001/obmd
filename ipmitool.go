@@ -1,11 +1,16 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 
 	"github.com/kr/pty"
+)
+
+var (
+	ErrInvalidBootdev = errors.New("Invalid boot device.")
 )
 
 type IpmitoolDialer struct {
@@ -25,14 +30,7 @@ func (p *ipmiProcess) Close() error {
 }
 
 func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
-	cmd := exec.Command(
-		"ipmitool",
-		"-I", "lanplus",
-		"-U", info.User,
-		"-P", info.Pass,
-		"-H", info.Addr,
-		"sol", "activate",
-	)
+	cmd := d.callIpmitool(info, "sol", "activate")
 	stdio, err := pty.Start(cmd)
 	if err != nil {
 		return nil, err
@@ -41,4 +39,43 @@ func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 		ReadCloser: stdio,
 		proc:       cmd.Process,
 	}, nil
+}
+
+func (d *IpmitoolDialer) callIpmitool(info *IpmiInfo, args ...string) exec.Cmd {
+	return exec.Command(
+		"ipmitool",
+		"-I", "lanplus",
+		"-U", info.User,
+		"-P", info.Pass,
+		"-H", info.Addr,
+		args...)
+}
+
+func (d *IpmitoolDialer) PowerOff(info *IpmiInfo) error {
+	return d.callIpmitool(info, "chassis", "power", "off").Run()
+}
+
+func (d *IpmitoolDialer) PowerCycle(info *IpmiInfo, force bool) error {
+	var op string
+	if force {
+		op = "reset"
+	} else {
+		op = "cycle"
+	}
+
+	err := d.callIpmitool(info, "chassis", "power", op).Run()
+	if err == nil {
+		return nil
+	}
+	// The above can fail if the machine is already powered off; in
+	// this case we just turn it on:
+	return d.callIpmitool(info, "chassis", "power", "on").Run()
+}
+
+func (d *IpmitoolDialer) SetBootdev(info *IpmiInfo, dev string) error {
+	if dev != "disk" && dev != "pxe" && dev != "none" {
+		return ErrInvalidBootdev
+	}
+	return d.callIpmitool(info,
+		"chassis", "bootdev", dev, "options=persistent").Run()
 }

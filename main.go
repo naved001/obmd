@@ -286,6 +286,10 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 			})
 		}))
 
+	r.Methods("POST").Path("/node/{node_id}/power_off").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		})
+
 	// Connect to the console. This is the one thing that doesn't require the admin token.
 	r.Methods("GET").Path("/node/{node_id}/console").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
