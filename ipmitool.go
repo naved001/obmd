@@ -41,14 +41,18 @@ func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	}, nil
 }
 
-func (d *IpmitoolDialer) callIpmitool(info *IpmiInfo, args ...string) exec.Cmd {
-	return exec.Command(
-		"ipmitool",
+func (d *IpmitoolDialer) callIpmitool(info *IpmiInfo, args ...string) *exec.Cmd {
+	// Annoyingly, when invoking a variadic function f(x ...Foo), you can't
+	// just do Foo(x, y, z, ...more); you need either Foo(x, y, z) or
+	// Foo(...more). We work around this by adding the static arguments to
+	// the slice, and then doing the latter:
+	args = append([]string{
 		"-I", "lanplus",
 		"-U", info.User,
 		"-P", info.Pass,
 		"-H", info.Addr,
-		args...)
+	}, args...)
+	return exec.Command("ipmitool", args...)
 }
 
 func (d *IpmitoolDialer) PowerOff(info *IpmiInfo) error {
