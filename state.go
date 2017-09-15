@@ -46,7 +46,7 @@ func NewState(db *sql.DB) (*State, error) {
 
 // Set the node `nodeId`'s ipmi info to `info`. Create the node if it does not
 // already exist.
-func (s *State) SetNode(nodeId string, info IpmiInfo) (*Node, error) {
+func (s *State) SetNode(nodeId string, info IpmiInfo) error {
 	node, err := s.GetNode(nodeId)
 	if err != nil {
 		// If the node doesn't exist, create it:
@@ -57,11 +57,10 @@ func (s *State) SetNode(nodeId string, info IpmiInfo) (*Node, error) {
 		VALUES (?, ?, ?, ?, 0)`, nodeId, info.User, info.Pass, info.Addr,
 		)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	err = node.BumpVersion(s.db)
-	return node, err
+	return node.BumpVersion(s.db)
 }
 
 // Get the node `nodeId`. Returns nil and an error if the node is not found.

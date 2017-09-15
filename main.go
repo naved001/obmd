@@ -210,7 +210,7 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 			}
 
 			nodeId := mux.Vars(req)["node_id"]
-			_, err = state.SetNode(nodeId, info)
+			err = state.SetNode(nodeId, info)
 			if err != nil {
 				log.Println("Error in SetNode():", err)
 				w.WriteHeader(http.StatusInternalServerError)
