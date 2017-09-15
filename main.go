@@ -22,6 +22,9 @@ import (
 // struct. This is an interface for testing purposes.
 type IpmiDialer interface {
 	DialIpmi(info *IpmiInfo) (io.ReadCloser, error)
+	PowerOff(info *IpmiInfo) error
+	PowerCycle(info *IpmiInfo, force bool) error
+	SetBootdev(info *IpmiInfo, dev string) error
 }
 
 // Contents of the config file
@@ -53,6 +56,16 @@ type Token [128 / 8]byte
 type VersionArgs struct {
 	// Expected version number.
 	Version uint64 `json:"version"`
+}
+
+// request body for the power cycle call
+type PowerCycleArgs struct {
+	Force bool `json:"force"`
+}
+
+// request body for the set bootdev call
+type SetBootdevArgs struct {
+	Dev string `json:"bootdev"`
 }
 
 // Convert v to JSON. This is a convienence wrapper around json.Marshal,
@@ -190,6 +203,29 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 		})
 	}
 
+	withValidToken := func(handler func(w http.ResponseWriter, req *http.Request, node *Node)) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			var token Token
+			err := (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			state.Lock()
+			defer state.Unlock()
+			node, err := state.GetNode(mux.Vars(req)["node_id"])
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if !node.ValidToken(token) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			handler(w, req, node)
+		})
+	}
+
 	r := mux.NewRouter()
 
 	adminR := r.MatcherFunc(func(req *http.Request, m *mux.RouteMatch) bool {
@@ -287,45 +323,72 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 		}))
 
 	r.Methods("POST").Path("/node/{node_id}/power_off").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		})
+		Handler(withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
+			err := dialer.PowerOff(&node.Ipmi)
+			if err != nil {
+				log.Println("power_off:", err)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}))
 
-	// Connect to the console. This is the one thing that doesn't require the admin token.
-	r.Methods("GET").Path("/node/{node_id}/console").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			// We don't use withLock here, since we want to
-			// release the lock before returning.
-			var token Token
-			err := (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
+	r.Methods("POST").Path("/node/{node_id}/power_cycle").
+		Handler(withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
+			var args PowerCycleArgs
+			err := json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
+			err = dialer.PowerCycle(&node.Ipmi, args.Force)
+			if err != nil {
+				log.Println("power_cycle:", err)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}))
+
+	r.Methods("PUT").Path("/node/{node_id}/boot_device").
+		Handler(withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
+			var args SetBootdevArgs
+			err := json.NewDecoder(req.Body).Decode(&args)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			err = dialer.SetBootdev(&node.Ipmi, args.Dev)
+			switch err {
+			case ErrInvalidBootdev:
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(err.Error()))
+			case nil:
+				// Success!
+				return
+			default:
+				log.Println("set_bootdev:", err)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}))
+
+	// Connect to the console.
+	r.Methods("GET").Path("/node/{node_id}/console").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			var Conn io.ReadCloser
 
-			if !func() bool {
-				// Wrapping this in a function and using defer simplifies the
-				// control flow with unlock; we therefore put our critical
-				// section here.
-				state.Lock()
-				defer state.Unlock()
-				node, err := state.GetNode(mux.Vars(req)["node_id"])
-				if err != nil {
-					w.WriteHeader(http.StatusNotFound)
-					return false
-				}
-				if !node.ValidToken(token) {
-					w.WriteHeader(http.StatusBadRequest)
-					return false
-				}
-
+			withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
 				// OK, auth checks out; make the connection.
 				Conn, err = node.Connect(dialer)
+				if err != nil {
+					log.Println("node.Connect:", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 				node.Conn = Conn
-				return err == nil
-			}() {
-				// Something in the critical section failed; bail out.
+			}).ServeHTTP(w, req)
+
+			if Conn == nil {
+				// Either withValidToken rejected the request, or Connect failed;
+				// don't establish a connection.
 				return
 			}
 

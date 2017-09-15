@@ -71,6 +71,10 @@ func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	return theirConn, nil
 }
 
+func (d *MockIpmiDialer) PowerOff(info *IpmiInfo) error               { panic("Not Implemented") }
+func (d *MockIpmiDialer) PowerCycle(info *IpmiInfo, force bool) error { panic("Not Implemented") }
+func (d *MockIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error { panic("Not Implemented") }
+
 // adminRequests is a sequence of admin-only requests that is used by various tests.
 var adminRequests = []requestSpec{
 	{"POST", "http://localhost:8080/node/somenode/version", ""},

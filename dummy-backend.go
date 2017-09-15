@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 )
 
@@ -24,4 +25,19 @@ func (d *DummyIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return conn, nil
+}
+
+func (d *DummyIpmiDialer) PowerOff(info *IpmiInfo) error {
+	log.Println("Powering off:", info)
+	return nil
+}
+
+func (d *DummyIpmiDialer) PowerCycle(info *IpmiInfo, force bool) error {
+	log.Printf("Powering off: %v (force = %v)\n", info, force)
+	return nil
+}
+
+func (d *DummyIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error {
+	log.Printf("Setting bootdev = %v: %v\n", dev, info)
+	return nil
 }
