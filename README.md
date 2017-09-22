@@ -15,14 +15,17 @@ A Config file is needed, whose contents should look like:
 
 
 ```json
-
 {
-    "ListenAddr": ":8080",
-    "AdminToken": "83hg98g3h32"
+	"ListenAddr": ":8080",
+	"AdminToken": "44d5ebcb1aae23bfefc8dca8314797eb"
 }
 ```
 
-The admin token should be (cryptographically) randomly generated.
+The admin token should be a (cryptographically randomly generated)
+128-bit value encoded in hexadecimal. You can generate such a token by
+running:
+
+    ./console-service -gen-token
 
 By default, the server looks for the config file at `./config.json`, but
 the `-config` command line option can be used to override this.

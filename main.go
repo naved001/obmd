@@ -30,7 +30,7 @@ type IpmiDialer interface {
 // Contents of the config file
 type Config struct {
 	ListenAddr string
-	AdminToken string
+	AdminToken Token
 }
 
 // Ipmi connection info
@@ -88,6 +88,9 @@ var (
 	configPath  = flag.String("config", "config.json", "Path to config file")
 	dummyDialer = flag.Bool("dummydialer", false, "Use dummy dialer (for development)")
 	dbPath      = flag.String("dbpath", ":memory:", "Path to sqlite database")
+
+	genToken = flag.Bool("gen-token", false,
+		"Generate a random token, instead of starting the daemon.")
 
 	// A dummy token to be used when there is no "valid" token. This is
 	// generated in init(), and never escapes the program. It exists so
@@ -230,9 +233,15 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 
 	adminR := r.MatcherFunc(func(req *http.Request, m *mux.RouteMatch) bool {
 		user, pass, ok := req.BasicAuth()
-		// FIXME: `pass ==` opens a timing attack. We should be using
-		// some off-the shelf password library.
-		return ok && user == "admin" && pass == config.AdminToken
+		if !(ok && user == "admin") {
+			return false
+		}
+		var tok Token
+		err := (&tok).UnmarshalText([]byte(pass))
+		if err != nil {
+			return false
+		}
+		return subtle.ConstantTimeCompare(tok[:], config.AdminToken[:]) == 1
 	}).Subrouter()
 
 	// Register a new node, or update the information in an existing one.
@@ -403,6 +412,16 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 
 func main() {
 	flag.Parse()
+	if *genToken {
+		var tok Token
+		_, err := rand.Read(tok[:])
+		chkfatal(err)
+		text, err := tok.MarshalText()
+		chkfatal(err)
+		fmt.Println(string(text))
+		return
+	}
+
 	buf, err := ioutil.ReadFile(*configPath)
 	chkfatal(err)
 	var config Config
