@@ -48,7 +48,11 @@ func (r *requestSpec) toNoAuth() *http.Request {
 // Convert the request spec to a request authenticated as admin.
 func (r *requestSpec) toAdminAuth() *http.Request {
 	req := r.toNoAuth()
-	req.SetBasicAuth("admin", theConfig.AdminToken)
+	text, err := theConfig.AdminToken.MarshalText()
+	if err != nil {
+		panic(err)
+	}
+	req.SetBasicAuth("admin", string(text))
 	return req
 }
 
@@ -91,9 +95,17 @@ var adminRequests = []requestSpec{
 	{"POST", "http://localhost:8080/node/somenode/version", ""},
 }
 
-var theConfig = &Config{
-	ListenAddr: ":8080", // Not actually used directly by the handler.
-	AdminToken: "secret",
+var theConfig *Config
+
+func init() {
+	theConfig = &Config{
+		ListenAddr: ":8080", // Not actually used directly by the handler.
+	}
+	err := (&theConfig.AdminToken).
+		UnmarshalText([]byte("44d5ebcb1aae23bfefc8dca8314797eb"))
+	if err != nil {
+		panic(err)
+	}
 }
 
 // Wraps makeHandler, passing testing-appropriate arguments
@@ -184,7 +196,11 @@ func TestOwnerRace(t *testing.T) {
 	// fail with a 409 CONFLICT status, as the current version should be 3.
 	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
 		bytes.NewBuffer([]byte(`{"version": 1}`)))
-	req.SetBasicAuth("admin", theConfig.AdminToken)
+	tokenText, err := theConfig.AdminToken.MarshalText()
+	if err != nil {
+		panic(err)
+	}
+	req.SetBasicAuth("admin", string(tokenText))
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	result := resp.Result()
@@ -192,7 +208,7 @@ func TestOwnerRace(t *testing.T) {
 		t.Fatal("Version mismatch did not result in an HTTP 409 CONFLICT.")
 	}
 	version := VersionArgs{}
-	err := json.NewDecoder(result.Body).Decode(&version)
+	err = json.NewDecoder(result.Body).Decode(&version)
 	if err != nil {
 		t.Fatal("Error decoding body of response:", err)
 	}
