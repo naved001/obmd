@@ -11,7 +11,7 @@ change the explanations to avoid this prerequisite in the future.
 
 # Configuration
 
-A Config file is needed, whose contents should look like:
+A config file is needed, whose contents should look like:
 
 
 ```json
@@ -62,12 +62,38 @@ Notes:
 * The fields in the body of the request are passed directly to ipmitool
 * If the node already exists, the information will be updated.
 
+### Checking the version of a node
+
+`GET /node/{node_id}/version`
+
+Response body
+
+```json
+{
+    "version": 7
+}
+```
+
+Get the current version of a node.
+
 ### Updating the version of a node
 
-`POST /node/{node_id}/version`
+`PUT /node/{node_id}/version`
 
-Increment the version number of the node, disconnecting any existing
-clients and invalidating any tokens.  Returns the new version number.
+Request body:
+
+```json
+{
+    "version": 7
+}
+```
+
+Update the version number of the node, disconnecting any existing
+clients and invalidating any tokens.  The version number in the request
+body must be `$current_version_number + 1`; otherwise an error will be
+returned and the version will not be updated. Returns the updated
+version number. (which should be the same as in the body of the
+request).
 
 Response body:
 
@@ -89,7 +115,7 @@ Request body:
 }
 ```
 
-Response body:
+Response body (success):
 
 ```json
 {
@@ -97,10 +123,20 @@ Response body:
 }
 ```
 
+Response body (failure):
+
+```json
+{
+    "version": 4
+}
+```
+
 Notes:
 
 * The version in the request must match the current version of the node.
-* The token in the response is to be used to view the console.
+* The token in a successful response is to be used to view the console.
+* In the case of a version-mismatch, the response body will return the
+  correct version.
 
 ## Non-admin operations
 
@@ -119,12 +155,12 @@ Notes:
 * If the `-dummydialer` cli option is passed, rather than launching
   ipmitool, the server will simply open a tcp connection to the
   "addr" specified (in which case it should be of the form required
-  by [net.Dial][1]. This is useful for experimentation.
+  by [net.Dial][net.Dial]. This is useful for experimentation.
 * There's some preliminary work on supporting a database, but it isn't
   actually used. The `-dbpath` argument sets the path, but the db won't
   be used beyond initializing a schema.
 
-[1]: https://golang.org/pkg/net/#Dial
+[net.Dial]: https://golang.org/pkg/net/#Dial
 
 [travis]: https://travis-ci.org/zenhack/console-service
 [travis-img]: https://travis-ci.org/zenhack/console-service.svg?branch=master

@@ -81,18 +81,24 @@ func (d *MockIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error { panic("N
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
 var adminRequests = []requestSpec{
-	{"POST", "http://localhost:8080/node/somenode/version", ""},
+	{"PUT", "http://localhost:8080/node/somenode/version", `{
+		"version": 2
+	}`},
 	{"PUT", "http://localhost:8080/node/somenode", `{
 		"host": "10.0.0.3",
 		"user": "ipmiuser",
 		"pass": "secret"
 	}`},
-	{"POST", "http://localhost:8080/node/somenode/version", ""},
+	{"PUT", "http://localhost:8080/node/somenode/version", `{
+		"version": 2
+	}`},
 	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
 		"version": 2
 	}`},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
-	{"POST", "http://localhost:8080/node/somenode/version", ""},
+	{"PUT", "http://localhost:8080/node/somenode/version", `{
+		"version": 3
+	`},
 }
 
 var theConfig *Config
@@ -178,8 +184,12 @@ func TestOwnerRace(t *testing.T) {
 			"user": "ipmiuser",
 			"pass": "secret"
 		}`},
-		{"POST", "http://localhost/node/somenode/version", ""},
-		{"POST", "http://localhost/node/somenode/version", ""},
+		{"PUT", "http://localhost/node/somenode/version", `{
+			"version": 2
+		}`},
+		{"PUT", "http://localhost/node/somenode/version", `{
+			"version": 3
+		}`},
 	}
 	for i, v := range setupRequests {
 		req := v.toAdminAuth()
@@ -288,7 +298,9 @@ func TestViewConsole(t *testing.T) {
 		}
 	}
 
-	req = (&requestSpec{"POST", "http://localhost/node/somenode/version", ""}).toAdminAuth()
+	req = (&requestSpec{"PUT", "http://localhost/node/somenode/version", `{
+		"version": 2
+	}`}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	status = resp.Result().StatusCode
@@ -313,4 +325,51 @@ func TestViewConsole(t *testing.T) {
 		t.Fatalf("Connection should have been closed, but we were able to successfully "+
 			"read data: %q", line)
 	}
+}
+
+// Check that bumping the version works if and only if the requested version is one greater
+// than the current version.
+func TestVersionMustBePlus1(t *testing.T) {
+
+	handler := newHandler()
+	requireStatus := func(expectedStatus int, spec requestSpec) {
+		req := spec.toAdminAuth()
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		actualStatus := resp.Result().StatusCode
+		if expectedStatus != actualStatus {
+			t.Fatalf("Request %v: expected status %d but got %d\n",
+				spec, expectedStatus, actualStatus)
+		}
+	}
+
+	// Setup: register the node:
+	requireStatus(http.StatusOK, requestSpec{
+		"PUT", "http://localhost/node/somenode", `{
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}`,
+	})
+
+	// Starting version is one, so this should fail:
+	requireStatus(http.StatusConflict, requestSpec{
+		"PUT", "http://localhost/node/somenode/version", `{
+			"version": 3
+		}`,
+	})
+
+	// But this correct:
+	requireStatus(http.StatusOK, requestSpec{
+		"PUT", "http://localhost/node/somenode/version", `{
+			"version": 2
+		}`,
+	})
+
+	// ...and now that the version has been bumped to 2, this should work:
+	requireStatus(http.StatusOK, requestSpec{
+		"PUT", "http://localhost/node/somenode/version", `{
+			"version": 3
+		}`,
+	})
 }

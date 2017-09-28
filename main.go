@@ -278,12 +278,24 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 		}))
 
 	// Bump the version of a node.
-	adminR.Methods("POST").Path("/node/{node_id}/version").
+	adminR.Methods("PUT").Path("/node/{node_id}/version").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
 			nodeId := mux.Vars(req)["node_id"]
 			node, err := state.GetNode(nodeId)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			args := VersionArgs{}
+			err = json.NewDecoder(req.Body).Decode(&args)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if args.Version != node.Version+1 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				w.Write(VersionArgs{Version: node.Version}.asJson())
 				return
 			}
 			err = node.BumpVersion(db)
