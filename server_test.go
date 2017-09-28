@@ -330,21 +330,10 @@ func TestViewConsole(t *testing.T) {
 // Check that bumping the version works if and only if the requested version is one greater
 // than the current version.
 func TestVersionMustBePlus1(t *testing.T) {
-
-	handler := newHandler()
-	requireStatus := func(expectedStatus int, spec requestSpec) {
-		req := spec.toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
-		actualStatus := resp.Result().StatusCode
-		if expectedStatus != actualStatus {
-			t.Fatalf("Request %v: expected status %d but got %d\n",
-				spec, expectedStatus, actualStatus)
-		}
-	}
+	h := newHandler()
 
 	// Setup: register the node:
-	requireStatus(http.StatusOK, requestSpec{
+	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode", `{
 			"addr": "10.0.0.3",
 			"user": "ipmiuser",
@@ -353,23 +342,77 @@ func TestVersionMustBePlus1(t *testing.T) {
 	})
 
 	// Starting version is one, so this should fail:
-	requireStatus(http.StatusConflict, requestSpec{
+	adminRequireStatus(t, h, http.StatusConflict, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
 			"version": 3
 		}`,
 	})
 
 	// But this correct:
-	requireStatus(http.StatusOK, requestSpec{
+	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
 			"version": 2
 		}`,
 	})
 
 	// ...and now that the version has been bumped to 2, this should work:
-	requireStatus(http.StatusOK, requestSpec{
+	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
 			"version": 3
 		}`,
 	})
+}
+
+func adminRequireStatus(t *testing.T, handler http.Handler, expectedStatus int, spec requestSpec) {
+	actualStatus := adminReq(handler, spec).Result().StatusCode
+	if expectedStatus != actualStatus {
+		t.Fatalf("Request %v: expected status %d but got %d\n",
+			spec, expectedStatus, actualStatus)
+	}
+}
+
+func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder {
+	req := spec.toAdminAuth()
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	return resp
+}
+
+func TestGetVersion(t *testing.T) {
+	h := newHandler()
+	args := VersionArgs{}
+
+	adminRequireStatus(t, h, http.StatusOK, requestSpec{
+		"PUT", "http://localhost/node/somenode", `{
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}`,
+	})
+
+	// Helper for verifying the version.
+	expectVersion := func(expectedVersion uint64) {
+		resp := adminReq(h, requestSpec{"GET", "http://localhost/node/somenode/version", ""})
+		err := json.NewDecoder(resp.Body).Decode(&args)
+		if err != nil {
+			t.Fatal("Error decoding body:", err)
+		}
+		if args.Version != expectedVersion {
+			t.Fatal("Version is incorrect; expected",
+				expectedVersion, "but got", args.Version)
+		}
+	}
+
+	// The version starts at 1.
+	expectVersion(1)
+
+	// Bump it.
+	adminRequireStatus(t, h, http.StatusOK, requestSpec{
+		"PUT", "http://localhost/node/somenode/version", `{
+			"version": 2
+		}`,
+	})
+
+	// And check it again:
+	expectVersion(2)
 }

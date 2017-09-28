@@ -277,6 +277,19 @@ func makeHandler(config *Config, dialer IpmiDialer, db *sql.DB) (http.Handler, e
 			state.DelNode(nodeId)
 		}))
 
+	adminR.Methods("GET").Path("/node/{node_id}/version").
+		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
+			nodeId := mux.Vars(req)["node_id"]
+			node, err := state.GetNode(nodeId)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(VersionArgs{Version: node.Version}.asJson())
+		}))
+
 	// Bump the version of a node.
 	adminR.Methods("PUT").Path("/node/{node_id}/version").
 		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
