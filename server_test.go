@@ -3,81 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
-
-// http.ResponseWriter that lets us stream a response during test.
-type responseStreamer struct {
-	code   int
-	header http.Header
-	body   io.WriteCloser
-}
-
-func (w responseStreamer) WriteHeader(code int) {
-	w.code = code
-}
-
-func (w responseStreamer) Header() http.Header {
-	return w.header
-}
-
-func (w responseStreamer) Write(p []byte) (n int, err error) {
-	if w.code == 0 {
-		w.WriteHeader(w.code)
-	}
-	return w.body.Write(p)
-}
-
-// handy type for specifying requests in data literals
-type requestSpec struct {
-	method, url, body string
-}
-
-// Convert the request spec to an unauthenticated http.Request
-func (r *requestSpec) toNoAuth() *http.Request {
-	return httptest.NewRequest(r.method, r.url, bytes.NewBuffer([]byte(r.body)))
-}
-
-// Convert the request spec to a request authenticated as admin.
-func (r *requestSpec) toAdminAuth() *http.Request {
-	req := r.toNoAuth()
-	text, err := theConfig.AdminToken.MarshalText()
-	if err != nil {
-		panic(err)
-	}
-	req.SetBasicAuth("admin", string(text))
-	return req
-}
-
-// Mock IpmiDialer for use in tests:
-type MockIpmiDialer struct {
-}
-
-// Connect to a mock console stream. It just writes "addr":"user":"pass" in a
-// loop until the connection is closed.
-func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
-	myConn, theirConn := net.Pipe()
-
-	go func() {
-		var err error
-		for err == nil {
-			_, err = fmt.Fprintf(myConn, "%q:%q:%q\n", info.Addr, info.User, info.Pass)
-		}
-	}()
-
-	return theirConn, nil
-}
-
-func (d *MockIpmiDialer) PowerOff(info *IpmiInfo) error               { panic("Not Implemented") }
-func (d *MockIpmiDialer) PowerCycle(info *IpmiInfo, force bool) error { panic("Not Implemented") }
-func (d *MockIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error { panic("Not Implemented") }
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
 var adminRequests = []requestSpec{
@@ -112,19 +43,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-}
-
-// Wraps makeHandler, passing testing-appropriate arguments
-func newHandler() http.Handler {
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		panic(err)
-	}
-	handler, err := makeHandler(theConfig, &MockIpmiDialer{}, db)
-	if err != nil {
-		panic(err)
-	}
-	return handler
 }
 
 // Verify: all admin-only requests should return 404 when made without
@@ -361,21 +279,6 @@ func TestVersionMustBePlus1(t *testing.T) {
 			"version": 3
 		}`,
 	})
-}
-
-func adminRequireStatus(t *testing.T, handler http.Handler, expectedStatus int, spec requestSpec) {
-	actualStatus := adminReq(handler, spec).Result().StatusCode
-	if expectedStatus != actualStatus {
-		t.Fatalf("Request %v: expected status %d but got %d\n",
-			spec, expectedStatus, actualStatus)
-	}
-}
-
-func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder {
-	req := spec.toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	return resp
 }
 
 func TestGetVersion(t *testing.T) {
