@@ -16,7 +16,7 @@ func (t *Token) UnmarshalText(text []byte) error {
 	var buf []byte
 	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%32x", &buf)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error unmarshalling token: %v", err)
 	}
 	copy(t[:], buf)
 	return nil
