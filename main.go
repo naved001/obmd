@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"database/sql"
@@ -48,9 +47,6 @@ type Node struct {
 	Conn         io.ReadCloser // Active console connection, if any.
 	CurrentToken Token         // Token for console access.
 }
-
-// A cryptographically random 128-bit value.
-type Token [128 / 8]byte
 
 // Request/response body for the calls that include version information.
 type VersionArgs struct {
@@ -103,20 +99,6 @@ var (
 func init() {
 	_, err := rand.Read(noToken[:])
 	chkfatal(err)
-}
-
-func (t Token) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf("%0x", t)), nil
-}
-
-func (t *Token) UnmarshalText(text []byte) error {
-	var buf []byte
-	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%32x", &buf)
-	if err != nil {
-		return err
-	}
-	copy(t[:], buf)
-	return nil
 }
 
 // Bumps the version of the node, disconnecting any existing connections and
