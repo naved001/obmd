@@ -1,5 +1,5 @@
 # The executable:
-/console-service
+/obmd
 
 # default path for the config file:
 /config.json
