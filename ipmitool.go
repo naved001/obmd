@@ -17,17 +17,27 @@ var (
 type IpmitoolDialer struct {
 }
 
-// A running ipmi process, connected to a serial console. Its Close() method
-// kills the process as well as closing its attached pty.
+// A running ipmi process, connected to a serial console. Its Close() method:
+//
+// * kills the process
+// * cleans up the ipmi controller's sol state
+// * closes its attached pty
 type ipmiProcess struct {
 	io.ReadCloser
-	proc *os.Process
+	proc   *os.Process
+	info   *IpmiInfo
+	dialer *IpmitoolDialer
 }
 
 func (p *ipmiProcess) Close() error {
 	p.proc.Signal(syscall.SIGTERM)
 	p.proc.Wait()
-	return p.ReadCloser.Close()
+	errDeactivate := p.dialer.callIpmitool(p.info, "sol", "deactivate").Run()
+	errClose := p.ReadCloser.Close()
+	if errDeactivate != nil {
+		return errDeactivate
+	}
+	return errClose
 }
 
 func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
@@ -39,6 +49,8 @@ func (d *IpmitoolDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 	return &ipmiProcess{
 		ReadCloser: stdio,
 		proc:       cmd.Process,
+		info:       info,
+		dialer:     d,
 	}, nil
 }
 
