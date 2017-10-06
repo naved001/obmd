@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"syscall"
 
 	"github.com/kr/pty"
 )
@@ -24,7 +25,7 @@ type ipmiProcess struct {
 }
 
 func (p *ipmiProcess) Close() error {
-	p.proc.Kill()
+	p.proc.Signal(syscall.SIGTERM)
 	p.proc.Wait()
 	return p.ReadCloser.Close()
 }
