@@ -16,8 +16,8 @@ var (
 type IpmitoolDialer struct {
 }
 
-// A running ipmi process, connected to a serial console. It's Close() method
-// kills the process as well as closing it's attached pty.
+// A running ipmi process, connected to a serial console. Its Close() method
+// kills the process as well as closing its attached pty.
 type ipmiProcess struct {
 	io.ReadCloser
 	proc *os.Process
