@@ -25,10 +25,17 @@ func (d *Daemon) runInDaemon(fn func()) {
 }
 
 func NewDaemon(state *State) *Daemon {
-	return &Daemon{
+	ret := &Daemon{
 		state: state,
 		funcs: make(chan func()),
 	}
+	go func() {
+		for {
+			fn := <-ret.funcs
+			fn()
+		}
+	}()
+	return ret
 }
 
 func (d *Daemon) DeleteNode(label string) (err error) {

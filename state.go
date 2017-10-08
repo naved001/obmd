@@ -112,8 +112,8 @@ func (s *State) SetNode(label string, info []byte) (*Node, error) {
 		// Node already exists; update the info and bump the version.
 		newVersion := node.Version + 1
 		_, err := tx.Exec(
-			`UPDATE node
-			SET (version, info) = (?, ?)
+			`UPDATE nodes
+			SET (version, obm_info) = (?, ?)
 			WHERE label = ?`,
 			newVersion, info, label,
 		)
