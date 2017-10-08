@@ -1,5 +1,6 @@
 package main
 
+/*
 import (
 	"bytes"
 	"database/sql"
@@ -9,6 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/zenhack/obmd/internal/driver"
+	"github.com/zenhack/obmd/internal/driver/dummy"
 )
 
 // utility functions for testing.
@@ -62,7 +66,13 @@ func newHandler() http.Handler {
 	if err != nil {
 		panic(err)
 	}
-	handler, err := makeHandler(theConfig, &MockIpmiDialer{}, db)
+	handler, err := makeHandler(
+		theConfig,
+		NewDaemon(NewState(db, driver.Registry{
+			"ipmi":  MockIpmiDriver{},
+			"dummy": dummy.Driver,
+		})),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -88,7 +98,7 @@ func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder
 }
 
 // Mock ipmi dialer for use in tests
-type MockIpmiDialer struct{}
+type MockIpmiDriver struct{}
 
 // Connect to a mock console stream. It just writes "addr":"user":"pass" in a
 // loop until the connection is closed.
@@ -108,3 +118,4 @@ func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
 func (d *MockIpmiDialer) PowerOff(info *IpmiInfo) error               { panic("Not Implemented") }
 func (d *MockIpmiDialer) PowerCycle(info *IpmiInfo, force bool) error { panic("Not Implemented") }
 func (d *MockIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error { panic("Not Implemented") }
+*/
