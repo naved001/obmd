@@ -63,7 +63,7 @@ func main() {
 	state, err := NewState(db, driver.Registry{
 		"ipmi": ipmi.Driver,
 
-		// TODO: maybe mask this being a build tag, so it's not there
+		// TODO: maybe mask this behind a build tag, so it's not there
 		// in production builds:
 		"dummy": dummy.Driver,
 	})
