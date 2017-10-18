@@ -1,21 +1,35 @@
 package main
 
-/*
+// utility functions for testing.
+
 import (
 	"bytes"
 	"database/sql"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/zenhack/obmd/internal/driver"
 	"github.com/zenhack/obmd/internal/driver/dummy"
+	"github.com/zenhack/obmd/internal/driver/mock"
 )
 
-// utility functions for testing.
+var theConfig *Config
+
+func errpanic(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func init() {
+	theConfig = &Config{
+		ListenAddr: ":8080", // Not actually used directly by the handler.
+	}
+	errpanic((&theConfig.AdminToken).
+		UnmarshalText([]byte("44d5ebcb1aae23bfefc8dca8314797eb")))
+}
 
 // http.ResponseWriter that lets us stream a response during test.
 type responseStreamer struct {
@@ -53,9 +67,7 @@ func (r *requestSpec) toNoAuth() *http.Request {
 func (r *requestSpec) toAdminAuth() *http.Request {
 	req := r.toNoAuth()
 	text, err := theConfig.AdminToken.MarshalText()
-	if err != nil {
-		panic(err)
-	}
+	errpanic(err)
 	req.SetBasicAuth("admin", string(text))
 	return req
 }
@@ -63,20 +75,13 @@ func (r *requestSpec) toAdminAuth() *http.Request {
 // Wraps makeHandler, passing testing-appropriate arguments
 func newHandler() http.Handler {
 	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		panic(err)
-	}
-	handler, err := makeHandler(
-		theConfig,
-		NewDaemon(NewState(db, driver.Registry{
-			"ipmi":  MockIpmiDriver{},
-			"dummy": dummy.Driver,
-		})),
-	)
-	if err != nil {
-		panic(err)
-	}
-	return handler
+	errpanic(err)
+	state, err := NewState(db, driver.Registry{
+		"ipmi":  mock.Driver,
+		"dummy": dummy.Driver,
+	})
+	errpanic(err)
+	return makeHandler(theConfig, NewDaemon(state))
 }
 
 // Make the specified request, and call t.Fatal if the status code is
@@ -96,26 +101,3 @@ func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder
 	handler.ServeHTTP(resp, req)
 	return resp
 }
-
-// Mock ipmi dialer for use in tests
-type MockIpmiDriver struct{}
-
-// Connect to a mock console stream. It just writes "addr":"user":"pass" in a
-// loop until the connection is closed.
-func (d *MockIpmiDialer) DialIpmi(info *IpmiInfo) (io.ReadCloser, error) {
-	myConn, theirConn := net.Pipe()
-
-	go func() {
-		var err error
-		for err == nil {
-			_, err = fmt.Fprintf(myConn, "%q:%q:%q\n", info.Addr, info.User, info.Pass)
-		}
-	}()
-
-	return theirConn, nil
-}
-
-func (d *MockIpmiDialer) PowerOff(info *IpmiInfo) error               { panic("Not Implemented") }
-func (d *MockIpmiDialer) PowerCycle(info *IpmiInfo, force bool) error { panic("Not Implemented") }
-func (d *MockIpmiDialer) SetBootdev(info *IpmiInfo, dev string) error { panic("Not Implemented") }
-*/

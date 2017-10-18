@@ -1,6 +1,5 @@
 package main
 
-/*
 import (
 	"bufio"
 	"bytes"
@@ -17,9 +16,12 @@ var adminRequests = []requestSpec{
 		"version": 2
 	}`},
 	{"PUT", "http://localhost:8080/node/somenode", `{
-		"host": "10.0.0.3",
-		"user": "ipmiuser",
-		"pass": "secret"
+		"type": "ipmi",
+		"info": {
+			"host": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}
 	}`},
 	{"PUT", "http://localhost:8080/node/somenode/version", `{
 		"version": 2
@@ -31,19 +33,6 @@ var adminRequests = []requestSpec{
 	{"PUT", "http://localhost:8080/node/somenode/version", `{
 		"version": 3
 	`},
-}
-
-var theConfig *Config
-
-func init() {
-	theConfig = &Config{
-		ListenAddr: ":8080", // Not actually used directly by the handler.
-	}
-	err := (&theConfig.AdminToken).
-		UnmarshalText([]byte("44d5ebcb1aae23bfefc8dca8314797eb"))
-	if err != nil {
-		panic(err)
-	}
 }
 
 // Verify: all admin-only requests should return 404 when made without
@@ -99,9 +88,12 @@ func TestOwnerRace(t *testing.T) {
 	// twice.
 	setupRequests := []requestSpec{
 		{"PUT", "http://localhost/node/somenode", `{
-			"addr": "10.0.0.3",
-			"user": "ipmiuser",
-			"pass": "secret"
+			"type": "ipmi",
+			"info": {
+				"addr": "10.0.0.3",
+				"user": "ipmiuser",
+				"pass": "secret"
+			}
 		}`},
 		{"PUT", "http://localhost/node/somenode/version", `{
 			"version": 2
@@ -320,4 +312,3 @@ func TestGetVersion(t *testing.T) {
 	// And check it again:
 	expectVersion(2)
 }
-*/

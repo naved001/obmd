@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"io"
 )
 
 var (
@@ -92,11 +93,22 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 	return
 }
 
-/*
-func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, error)
+func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, error) {
+	panic("Not implemented")
+}
 
-func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error)
-func (d *Daemon) PowerOffNode(label string, token *Token) error
-func (d *Daemon) PowerCycleNode(label string, force bool, token *Token) error
-func (d *Daemon) SetNodeBootDev(label string, dev string, token *Token) error
-*/
+func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error) {
+	panic("Not implmeneted")
+}
+
+func (d *Daemon) PowerOffNode(label string, token *Token) error {
+	panic("Not implmeneted")
+}
+
+func (d *Daemon) PowerCycleNode(label string, force bool, token *Token) error {
+	panic("Not implmeneted")
+}
+
+func (d *Daemon) SetNodeBootDev(label string, dev string, token *Token) error {
+	panic("Not implmeneted")
+}
