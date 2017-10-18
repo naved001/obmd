@@ -72,6 +72,20 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 		}
 	}
 
+	// Helper for responses which call for a version in the response.
+	relayVersionError := func(w http.ResponseWriter, context string, version uint64, err error) {
+		switch err {
+		case nil, ErrVersionConflict:
+			// Report the version to the client
+			w.Header().Set("Content-Type", "application/json")
+			relayError(w, "daemon.GetNodeVersion()", err)
+			w.Write(VersionArgs{Version: version}.asJson())
+		default:
+			// Otherwise, just fall back to whatever relayError does
+			relayError(w, "daemon.GetNodeVersion()", err)
+		}
+	}
+
 	// Fetch the node_id out of a request's captured variables. This requires that
 	// req was matched by a route that had "{node_id}" somewhere in its path.
 	nodeId := func(req *http.Request) string {
@@ -118,16 +132,19 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	adminR.Methods("GET").Path("/node/{node_id}/version").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			version, err := daemon.GetNodeVersion(nodeId(req))
-			switch err {
-			case nil, ErrVersionConflict:
-				// Report the version to the client
-				w.Header().Set("Content-Type", "application/json")
-				relayError(w, "daemon.GetNodeVersion()", err)
-				w.Write(VersionArgs{Version: version}.asJson())
-			default:
-				// Otherwise, just fall back to whatever relayError does
-				relayError(w, "daemon.GetNodeVersion()", err)
+			relayVersionError(w, "daemon.GetNodeVersion()", version, err)
+		})
+
+	adminR.Methods("PUT").Path("/node/{node_id}/version").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			args := VersionArgs{}
+			err := json.NewDecoder(req.Body).Decode(&args)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
+			version, err := daemon.SetNodeVersion(nodeId(req), args.Version)
+			relayVersionError(w, "daemon.SetNodeVersion()", version, err)
 		})
 
 	// ------ "Regular user" requests ------
@@ -162,24 +179,6 @@ func makeHandler(config *Config, driver driver.Driver, db *sql.DB) (http.Handler
 			handler(w, req, node)
 		})
 	}
-
-	// Bump the version of a node.
-	adminR.Methods("PUT").Path("/node/{node_id}/version").
-		Handler(withLock(func(w http.ResponseWriter, req *http.Request) {
-			nodeId := mux.Vars(req)["node_id"]
-			args := VersionArgs{}
-			err = json.NewDecoder(req.Body).Decode(&args)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			newVersion, err = daemon.SetNodeVersion(nodeId, args.Version)
-			if err != nil {
-				log.Println("Bumping version for node", nodeId, ":", err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			w.Write(VersionArgs{Version: newVersion}.asJson())
-		}))
 
 	// Get a new console token
 	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").

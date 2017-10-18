@@ -67,8 +67,32 @@ func (d *Daemon) GetNodeVersion(label string) (version uint64, err error) {
 	return
 }
 
+func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64, err error) {
+	d.runInDaemon(func() {
+		var node *Node
+		node, err = d.state.GetNode(label)
+		if err != nil {
+			err = ErrNoSuchNode
+			return
+		}
+		oldVersion := node.Version
+		if version != oldVersion+1 {
+			newVersion, err = oldVersion, ErrVersionConflict
+		}
+		// XXX: Slightly gross: SetNode bumps the version number itself, so we
+		// don't have to actually pass in the new version, but it would be nice
+		// if the check above didn't have to be coordinated separately.
+		node, err = d.state.SetNode(label, node.ConnInfo)
+		if err != nil {
+			newVersion = oldVersion
+			return
+		}
+		newVersion = node.Version
+	})
+	return
+}
+
 /*
-func (d *Daemon) SetNodeVersion(label string, version uint64) error
 func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, error)
 
 func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error)
