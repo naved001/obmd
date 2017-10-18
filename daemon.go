@@ -93,7 +93,7 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 	return
 }
 
-func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, error) {
+func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, uint64, error) {
 	panic("Not implemented")
 }
 

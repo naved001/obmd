@@ -147,6 +147,24 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			relayVersionError(w, "daemon.SetNodeVersion()", version, err)
 		})
 
+	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			args := VersionArgs{}
+			err := json.NewDecoder(req.Body).Decode(&args)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			token, version, err := daemon.GetNodeToken(nodeId(req), args.Version)
+			relayVersionError(w, "daemon.GetNodeToken()", version, err)
+			if err == nil {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(&TokenResp{
+					Token: *token,
+				})
+			}
+		})
+
 	// ------ "Regular user" requests ------
 
 	return r
@@ -179,26 +197,6 @@ func makeHandler(config *Config, driver driver.Driver, db *sql.DB) (http.Handler
 			handler(w, req, node)
 		})
 	}
-
-	// Get a new console token
-	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			nodeId := mux.Vars(req)["node_id"]
-			args := VersionArgs{}
-			err := json.NewDecoder(req.Body).Decode(&args)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			token, err := daemon.GetNodeToken(nodeId, args.Version)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			json.NewEncoder(w).Encode(&TokenResp{
-				Token: token,
-			})
-		})
 
 	r.Methods("POST").Path("/node/{node_id}/power_off").
 		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
