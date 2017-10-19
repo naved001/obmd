@@ -146,9 +146,12 @@ func TestViewConsole(t *testing.T) {
 
 	spec := requestSpec{
 		"PUT", "http://localhost/node/somenode", `{
-			"addr": "10.0.0.3",
-			"user": "ipmiuser",
-			"pass": "secret"
+			"type": "ipmi",
+			"info": {
+				"addr": "10.0.0.3",
+				"user": "ipmiuser",
+				"pass": "secret"
+			}
 		}`,
 	}
 	req := spec.toAdminAuth()
@@ -247,9 +250,12 @@ func TestVersionMustBePlus1(t *testing.T) {
 	// Setup: register the node:
 	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode", `{
-			"addr": "10.0.0.3",
-			"user": "ipmiuser",
-			"pass": "secret"
+			"type": "ipmi",
+			"info": {
+				"addr": "10.0.0.3",
+				"user": "ipmiuser",
+				"pass": "secret"
+			}
 		}`,
 	})
 
@@ -281,9 +287,12 @@ func TestGetVersion(t *testing.T) {
 
 	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode", `{
-			"addr": "10.0.0.3",
-			"user": "ipmiuser",
-			"pass": "secret"
+			"type": "ipmi",
+			"info": {
+				"addr": "10.0.0.3",
+				"user": "ipmiuser",
+				"pass": "secret"
+			}
 		}`,
 	})
 
