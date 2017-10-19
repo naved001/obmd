@@ -177,7 +177,6 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 
 	r.Methods("GET").Path("/node/{node_id}/console").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			var Conn io.ReadCloser
 			token, err := getToken(req)
 			conn, err := daemon.DialNodeConsole(nodeId(req), &token)
 			if err != nil {
@@ -185,7 +184,7 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			} else {
 				defer conn.Close()
 				w.Header().Set("Content-Type", "application/octet-stream")
-				io.Copy(w, Conn)
+				io.Copy(w, conn)
 			}
 		})
 
