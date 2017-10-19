@@ -94,7 +94,14 @@ func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, uint64, err
 func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error) {
 	d.Lock()
 	defer d.Unlock()
-	panic("Not implmeneted")
+	node, err := d.state.GetNode(label)
+	if err != nil {
+		return nil, err
+	}
+	if !node.ValidToken(*token) {
+		return nil, ErrInvalidToken
+	}
+	return node.OBM.DialConsole()
 }
 
 func (d *Daemon) PowerOffNode(label string, token *Token) error {

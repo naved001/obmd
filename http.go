@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -54,6 +55,8 @@ type TokenResp struct {
 func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	r := mux.NewRouter()
 
+	// ----- helper functions ------
+
 	// Handle the errors returned by Daemon methods, reporting the correct http status.
 	// This calls w.WriteHeader, so headers must be set before calling this method.
 	relayError := func(w http.ResponseWriter, context string, err error) {
@@ -90,6 +93,11 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	// req was matched by a route that had "{node_id}" somewhere in its path.
 	nodeId := func(req *http.Request) string {
 		return mux.Vars(req)["node_id"]
+	}
+
+	getToken := func(req *http.Request) (token Token, err error) {
+		err = (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
+		return token, err
 	}
 
 	// Router for admin-only requests. Because we validate the admin token here,
@@ -167,6 +175,20 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 
 	// ------ "Regular user" requests ------
 
+	r.Methods("GET").Path("/node/{node_id}/console").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			var Conn io.ReadCloser
+			token, err := getToken(req)
+			conn, err := daemon.DialNodeConsole(nodeId(req), &token)
+			if err != nil {
+				relayError(w, "daemon.DialNodeConsole()", err)
+			} else {
+				defer conn.Close()
+				w.Header().Set("Content-Type", "application/octet-stream")
+				io.Copy(w, Conn)
+			}
+		})
+
 	return r
 }
 
@@ -174,29 +196,6 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 // Create an HTTP handler for the core logic of our system, using the provided
 // configuration and the driver for establishing connections.
 func makeHandler(config *Config, driver driver.Driver, db *sql.DB) (http.Handler, error) {
-
-	withValidToken := func(handler func(w http.ResponseWriter, req *http.Request, node *Node)) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			var token Token
-			err := (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			state.Lock()
-			defer state.Unlock()
-			node, err := state.GetNode(mux.Vars(req)["node_id"])
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			if !node.ValidToken(token) {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			handler(w, req, node)
-		})
-	}
 
 	r.Methods("POST").Path("/node/{node_id}/power_off").
 		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
@@ -246,33 +245,6 @@ func makeHandler(config *Config, driver driver.Driver, db *sql.DB) (http.Handler
 			}
 		}))
 
-	// Connect to the console.
-	r.Methods("GET").Path("/node/{node_id}/console").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			var Conn io.ReadCloser
-
-			withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
-				// OK, auth checks out; make the connection.
-				Conn, err = node.Connect(dialer)
-				if err != nil {
-					log.Println("node.Connect:", err)
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-				node.Conn = Conn
-			}).ServeHTTP(w, req)
-
-			if Conn == nil {
-				// Either withValidToken rejected the request, or Connect failed;
-				// don't establish a connection.
-				return
-			}
-
-			// We have a connection; stream the data to the client.
-			defer Conn.Close()
-			w.Header().Set("Content-Type", "application/octet-stream")
-			io.Copy(w, Conn)
-		})
 
 	return r, nil
 }
