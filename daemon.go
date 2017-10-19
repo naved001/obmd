@@ -77,21 +77,21 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 	return
 }
 
-func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, uint64, error) {
+func (d *Daemon) GetNodeToken(label string, version uint64) (Token, uint64, error) {
 	d.Lock()
 	defer d.Unlock()
 	node, err := d.state.GetNode(label)
 	if err != nil {
-		return nil, 0, err
+		return Token{}, 0, err
 	}
 	token, err := node.NewToken()
 	if err != nil {
-		return nil, node.Version, err
+		return Token{}, node.Version, err
 	}
 	if version != node.Version {
-		return nil, node.Version, ErrVersionConflict
+		return Token{}, node.Version, ErrVersionConflict
 	}
-	return &token, node.Version, nil
+	return token, node.Version, nil
 }
 
 func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error) {

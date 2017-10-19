@@ -168,7 +168,7 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			if err == nil {
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(&TokenResp{
-					Token: *token,
+					Token: token,
 				})
 			}
 		})
