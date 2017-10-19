@@ -178,6 +178,10 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	r.Methods("GET").Path("/node/{node_id}/console").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			token, err := getToken(req)
+			if err != nil {
+				relayError(w, "getToken()", err)
+				return
+			}
 			conn, err := daemon.DialNodeConsole(nodeId(req), &token)
 			if err != nil {
 				relayError(w, "daemon.DialNodeConsole()", err)
