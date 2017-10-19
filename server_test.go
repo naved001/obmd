@@ -126,7 +126,8 @@ func TestOwnerRace(t *testing.T) {
 	handler.ServeHTTP(resp, req)
 	result := resp.Result()
 	if result.StatusCode != http.StatusConflict {
-		t.Fatal("Version mismatch did not result in an HTTP 409 CONFLICT.")
+		t.Fatalf("Version mismatch did not result in an HTTP 409 CONFLICT "+
+			"(Got %v instead).", result.StatusCode)
 	}
 	version := VersionArgs{}
 	err = json.NewDecoder(result.Body).Decode(&version)
