@@ -32,7 +32,7 @@ var adminRequests = []requestSpec{
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
 	{"PUT", "http://localhost:8080/node/somenode/version", `{
 		"version": 3
-	`},
+	}`},
 }
 
 // Verify: all admin-only requests should return 404 when made without
