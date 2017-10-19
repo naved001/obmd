@@ -24,14 +24,14 @@ var adminRequests = []requestSpec{
 		}
 	}`},
 	{"PUT", "http://localhost:8080/node/somenode/version", `{
-		"version": 2
+		"version": 1
 	}`},
 	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
-		"version": 2
+		"version": 1
 	}`},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
 	{"PUT", "http://localhost:8080/node/somenode/version", `{
-		"version": 3
+		"version": 2
 	}`},
 }
 
@@ -96,10 +96,10 @@ func TestOwnerRace(t *testing.T) {
 			}
 		}`},
 		{"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
+			"version": 1
 		}`},
 		{"PUT", "http://localhost/node/somenode/version", `{
-			"version": 3
+			"version": 2
 		}`},
 	}
 	for i, v := range setupRequests {
@@ -113,10 +113,10 @@ func TestOwnerRace(t *testing.T) {
 		}
 	}
 
-	// Now, try to request a token with version 1 as the expected owner. This should
-	// fail with a 409 CONFLICT status, as the current version should be 3.
+	// Now, try to request a token with version 0. This should fail with a 409 CONFLICT status,
+	// as the current version should be 2.
 	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
-		bytes.NewBuffer([]byte(`{"version": 1}`)))
+		bytes.NewBuffer([]byte(`{"version": 0}`)))
 	tokenText, err := theConfig.AdminToken.MarshalText()
 	if err != nil {
 		panic(err)
@@ -134,7 +134,7 @@ func TestOwnerRace(t *testing.T) {
 	if err != nil {
 		t.Fatal("Error decoding body of response:", err)
 	}
-	if version.Version != 3 {
+	if version.Version != 2 {
 		t.Fatal("Unexpected version number; expected 2 but got", version.Version)
 	}
 }
@@ -163,7 +163,7 @@ func TestViewConsole(t *testing.T) {
 			spec, status)
 	}
 	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
-		"version": 1
+		"version": 0
 	}`}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
@@ -259,24 +259,24 @@ func TestVersionMustBePlus1(t *testing.T) {
 		}`,
 	})
 
-	// Starting version is one, so this should fail:
+	// Starting version is zero , so this should fail:
 	adminRequireStatus(t, h, http.StatusConflict, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 3
+			"version": 2
 		}`,
 	})
 
 	// But this correct:
 	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
+			"version": 1
 		}`,
 	})
 
-	// ...and now that the version has been bumped to 2, this should work:
+	// ...and now that the version has been bumped to 1, this should work:
 	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 3
+			"version": 2
 		}`,
 	})
 }
@@ -309,16 +309,16 @@ func TestGetVersion(t *testing.T) {
 		}
 	}
 
-	// The version starts at 1.
-	expectVersion(1)
+	// The version starts at 0.
+	expectVersion(0)
 
 	// Bump it.
 	adminRequireStatus(t, h, http.StatusOK, requestSpec{
 		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
+			"version": 1
 		}`,
 	})
 
 	// And check it again:
-	expectVersion(2)
+	expectVersion(1)
 }

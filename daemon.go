@@ -63,7 +63,7 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 	}
 	oldVersion := node.Version
 	if version != oldVersion+1 {
-		newVersion, err = oldVersion, ErrVersionConflict
+		return oldVersion, ErrVersionConflict
 	}
 	// XXX: Slightly gross: SetNode bumps the version number itself, so we
 	// don't have to actually pass in the new version, but it would be nice
@@ -87,6 +87,9 @@ func (d *Daemon) GetNodeToken(label string, version uint64) (*Token, uint64, err
 	token, err := node.NewToken()
 	if err != nil {
 		return nil, node.Version, err
+	}
+	if version != node.Version {
+		return nil, node.Version, ErrVersionConflict
 	}
 	return &token, node.Version, nil
 }
