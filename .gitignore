@@ -10,3 +10,6 @@
 # SQLite databases:
 *.db
 *.sqlite3
+
+# Common path for coverage profile:
+/cover.out
