@@ -65,7 +65,7 @@ func (s *State) getNode(sess sqlSession, label string) (*Node, error) {
 		FROM nodes
 		WHERE label = ?`,
 		label,
-	).Scan(&version, &obmInfo)
+	).Scan(&obmInfo, &version)
 	if err != nil {
 		return nil, err
 	}
