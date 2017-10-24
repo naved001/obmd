@@ -164,8 +164,9 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 				return
 			}
 			token, version, err := daemon.GetNodeToken(nodeId(req), args.Version)
-			relayVersionError(w, "daemon.GetNodeToken()", version, err)
-			if err == nil {
+			if err != nil {
+				relayVersionError(w, "daemon.GetNodeToken()", version, err)
+			} else {
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(&TokenResp{
 					Token: token,
