@@ -240,7 +240,7 @@ func TestViewConsole(t *testing.T) {
 	// disconnected by the version bump, and the mock console goroutine should have seen
 	// it on its next call to Write.
 	line, err := bufReader.ReadString('\n')
-	if err != nil {
+	if err == nil {
 		t.Logf("Read another line (%q) after the connection was closed; "+
 			"no cause for alarm.", line)
 	}
