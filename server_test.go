@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -214,13 +215,21 @@ func TestViewConsole(t *testing.T) {
 	}
 
 	req = (&requestSpec{"PUT", "http://localhost/node/somenode/version", `{
-		"version": 2
+		"version": 1
 	}`}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
-	status = resp.Result().StatusCode
+	result = resp.Result()
+	status = result.StatusCode
+	body, err := ioutil.ReadAll(result.Body)
+	if err != nil {
+		t.Fatal("Error reading response body:", err)
+	}
 	if status != http.StatusOK {
-		t.Fatalf("version bump request failed with status: %d", status)
+		t.Fatalf(
+			"version bump request failed. http status = %d\nresponse body:\n\n%s",
+			status, body,
+		)
 	}
 
 	// Clear out any buffered data:
