@@ -38,7 +38,10 @@ func (d *dummyOBM) Serve(ctx context.Context) {
 }
 
 func (d *dummyOBM) DropConsole() error {
-	return d.conn.Close()
+	if d.conn != nil {
+		return d.conn.Close()
+	}
+	return nil
 }
 
 func (d *dummyOBM) DialConsole() (io.ReadCloser, error) {
