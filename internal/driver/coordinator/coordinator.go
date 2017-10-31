@@ -73,7 +73,7 @@ func (s *Server) Serve(ctx context.Context) {
 		}
 		if err := proc.Shutdown(); err != nil {
 			log.Println(
-				"Error shutting down ipmitool process:",
+				"Error shutting down obm connection:",
 				err, "continuing, but this could potentially",
 				"cause problems.",
 			)
