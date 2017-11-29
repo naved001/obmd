@@ -189,7 +189,26 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			} else {
 				defer conn.Close()
 				w.Header().Set("Content-Type", "application/octet-stream")
-				io.Copy(w, conn)
+
+				// Copy stream to the client. Unfortunately we can't just use
+				// io.Copy here, because we need to call Flush() between writes.
+				// otherwise, the client won't receive console data in a timely
+				// manner, because the ResponseWriter may buffer it.
+				var buf [4096]byte
+				for err == nil {
+					var n int
+					n, err = conn.Read(buf[:])
+					if n != 0 {
+						_, err = w.Write(buf[:n])
+					}
+					if flusher, ok := w.(http.Flusher); ok {
+						flusher.Flush()
+					}
+				}
+
+				if err != io.EOF {
+					log.Println("Error reading from console:", err)
+				}
 			}
 		})
 
