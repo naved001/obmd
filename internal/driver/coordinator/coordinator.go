@@ -1,4 +1,4 @@
-// Package coordinator handles high-level synchronization for drivers.
+// Package coordinator handles high-level console synchronization for drivers.
 package coordinator
 
 import (
@@ -7,12 +7,20 @@ import (
 	"log"
 )
 
+// A proc is a live "process" managing a console connection.
 type Proc interface {
+	// Shutdown disconnects the console session managed by this Proc.
+	// If the session is already disconnected, this is a no-op.
 	Shutdown() error
+
+	// Reader returns an io.Reader that reads from the console.
 	Reader() io.Reader
 }
 
+// A "primitive" OBM, from which the coordinator can build a driver.OBM.
 type OBM interface {
+	// Connect to the console, returning the managing Proc and an
+	// error, if any.
 	Dial() (Proc, error)
 }
 
@@ -38,8 +46,11 @@ func (c *consoleConn) Close() error {
 	return nil
 }
 
-// An server manages synchronization for a single OBM. The zero value is not
-// meaningful use NewServer to create a value.
+// An server manages console synchronization for a single OBM. It implements the
+// console related methods of driver.OBM, and may be embedded in another struct
+// which handles the non-console functionality.
+//
+// The zero value is not meaningful; use NewServer to create a value.
 type Server struct {
 	// Most of the server logic operates in it's own goroutine (see Serve).
 	// The fields of this type are used by other goroutines to interact with
@@ -124,11 +135,13 @@ func NewServer(obm OBM) *Server {
 	}
 }
 
+// Disconnect the current console session. See driver.OBM.DropConsole.
 func (s *Server) DropConsole() error {
 	s.dropConsole <- struct{}{}
 	return nil
 }
 
+// Connect to the console. This see driver.OBM.DialConsole
 func (s *Server) DialConsole() (io.ReadCloser, error) {
 	req := consoleReq{
 		err:  make(chan error),
@@ -143,7 +156,8 @@ func (s *Server) DialConsole() (io.ReadCloser, error) {
 	}
 }
 
-// Run `fn` inside the server's main loop.
+// Run `fn` inside the server's main loop. This ensures that no (other) console
+// related functionality is taken by the server while `fn` is running.
 func (s *Server) RunInServer(fn func()) {
 	done := make(chan struct{})
 	s.funcs <- func() {
