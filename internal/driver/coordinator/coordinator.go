@@ -65,7 +65,10 @@ func (s *Server) Serve(ctx context.Context) {
 		drop: make(chan struct{}, 1),
 	}
 
-	var proc Proc
+	var (
+		proc Proc
+		err  error
+	)
 
 	stopProcess := func() {
 		if proc == nil {
@@ -94,7 +97,7 @@ func (s *Server) Serve(ctx context.Context) {
 			fn()
 		case req := <-s.dialConsole:
 			stopProcess()
-			proc, err := s.obm.Dial()
+			proc, err = s.obm.Dial()
 			if err != nil {
 				req.err <- err
 				continue
