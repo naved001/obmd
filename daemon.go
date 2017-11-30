@@ -79,6 +79,9 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 		return node.Version, ErrVersionConflict
 	}
 	err = d.state.BumpNodeVersion(label)
+	if err == nil {
+		node.OBM.DropConsole()
+	}
 	return node.Version, err
 }
 

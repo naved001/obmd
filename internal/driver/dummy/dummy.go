@@ -35,11 +35,14 @@ type dummyOBM struct {
 }
 
 func (d *dummyOBM) Serve(ctx context.Context) {
+	<-ctx.Done()
+	d.DropConsole()
 }
 
 func (d *dummyOBM) DropConsole() error {
 	if d.conn != nil {
 		return d.conn.Close()
+		d.conn = nil
 	}
 	return nil
 }
@@ -54,6 +57,7 @@ func (d *dummyOBM) DialConsole() (io.ReadCloser, error) {
 		conn.Close()
 		return nil, err
 	}
+	d.conn = conn
 	return conn, nil
 }
 
