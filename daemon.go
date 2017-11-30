@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	ErrNodeExists      = errors.New("Node already exists.")
 	ErrNoSuchNode      = errors.New("No such node.")
 	ErrInvalidToken    = errors.New("Invalid token.")
 	ErrVersionConflict = errors.New("Version conflict")
@@ -30,26 +31,40 @@ func (d *Daemon) DeleteNode(label string) error {
 	return d.state.DeleteNode(label)
 }
 
-func (d *Daemon) SetNode(label string, info []byte) (err error) {
+func (d *Daemon) SetNode(label string, info []byte) error {
 	d.Lock()
 	defer d.Unlock()
-	_, err = d.state.SetNode(label, info)
-	return
+
+	d.state.check()
+
+	node, err := d.state.GetNode(label)
+	if err == nil {
+		// The node already exists; store the version, delete it, then
+		// re-create it.
+		version := node.Version
+		if err = d.state.DeleteNode(label); err != nil {
+			return err
+		}
+		// The node has been modified, so increment the version.
+		_, err = d.state.NewNode(label, info, version+1)
+	} else {
+		// The node doesn't exist; just create it with version = 0
+		_, err = d.state.NewNode(label, info, 0)
+	}
+
+	d.state.check()
+	return err
 }
 
 func (d *Daemon) GetNodeVersion(label string) (version uint64, err error) {
 	d.Lock()
 	defer d.Unlock()
-	var node *Node
-	node, err = d.state.GetNode(label)
+	d.state.check()
+	node, err := d.state.GetNode(label)
 	if err != nil {
-		// TODO: it would be better not to assume *any* error
-		// from GetNode is a simple abscence.
-		err = ErrNoSuchNode
-		return
+		return 0, err
 	}
-	version = node.Version
-	return
+	return node.Version, err
 }
 
 func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64, err error) {
@@ -58,23 +73,13 @@ func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64
 	var node *Node
 	node, err = d.state.GetNode(label)
 	if err != nil {
-		err = ErrNoSuchNode
-		return
+		return 0, err
 	}
-	oldVersion := node.Version
-	if version != oldVersion+1 {
-		return oldVersion, ErrVersionConflict
+	if version != node.Version+1 {
+		return node.Version, ErrVersionConflict
 	}
-	// XXX: Slightly gross: SetNode bumps the version number itself, so we
-	// don't have to actually pass in the new version, but it would be nice
-	// if the check above didn't have to be coordinated separately.
-	node, err = d.state.SetNode(label, node.ConnInfo)
-	if err != nil {
-		newVersion = oldVersion
-		return
-	}
-	newVersion = node.Version
-	return
+	err = d.state.BumpNodeVersion(label)
+	return node.Version, err
 }
 
 func (d *Daemon) GetNodeToken(label string, version uint64) (Token, uint64, error) {
@@ -84,12 +89,12 @@ func (d *Daemon) GetNodeToken(label string, version uint64) (Token, uint64, erro
 	if err != nil {
 		return Token{}, 0, err
 	}
+	if version != node.Version {
+		return Token{}, node.Version, ErrVersionConflict
+	}
 	token, err := node.NewToken()
 	if err != nil {
 		return Token{}, node.Version, err
-	}
-	if version != node.Version {
-		return Token{}, node.Version, ErrVersionConflict
 	}
 	return token, node.Version, nil
 }

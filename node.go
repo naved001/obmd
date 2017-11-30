@@ -10,7 +10,6 @@ import (
 
 // Information about a node
 type Node struct {
-	Label        string             // An arbitrary name for the node.
 	Version      uint64             // The node's version; incremented on each change.
 	ConnInfo     []byte             // Connection info for this node's OBM.
 	ObmCancel    context.CancelFunc // stop the OBM
@@ -20,19 +19,16 @@ type Node struct {
 
 // Returns a new node with the given driver information, at version 0, with no
 // valid token.
-func NewNode(label string, d driver.Driver, info []byte) (*Node, error) {
+func NewNode(d driver.Driver, info []byte, version uint64) (*Node, error) {
 	obm, err := d.GetOBM(info)
 	if err != nil {
 		return nil, err
 	}
 	ret := &Node{
-		Label:    label,
 		OBM:      obm,
 		ConnInfo: info,
+		Version:  version,
 	}
-	ctx, cancel := context.WithCancel(context.TODO())
-	ret.ObmCancel = cancel
-	go ret.OBM.Serve(ctx)
 	copy(ret.CurrentToken[:], noToken[:])
 	return ret, nil
 }
@@ -60,4 +56,21 @@ func (n *Node) ValidToken(token Token) bool {
 func (n *Node) ClearToken() {
 	n.OBM.DropConsole()
 	copy(n.CurrentToken[:], noToken[:])
+}
+
+func (n *Node) StartOBM() {
+	if n.ObmCancel != nil {
+		panic("BUG: OBM is already started!")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	n.ObmCancel = cancel
+	go n.OBM.Serve(ctx)
+}
+
+func (n *Node) StopOBM() {
+	if n.ObmCancel == nil {
+		panic("BUG: OBM is not running!")
+	}
+	n.ObmCancel()
+	n.ObmCancel = nil
 }

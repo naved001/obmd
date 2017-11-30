@@ -20,8 +20,7 @@ type State struct {
 	driver driver.Driver
 }
 
-// Create a State from a database. This operates lazily, loading objects when
-// they are first needed.
+// Create a State from a database. This loads existant objects in immediately.
 func NewState(db *sql.DB, driver driver.Driver) (*State, error) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS nodes (
 		label VARCHAR(80) PRIMARY KEY,
@@ -31,122 +30,112 @@ func NewState(db *sql.DB, driver driver.Driver) (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = db.Ping()
-	if err != nil {
-		return nil, err
-	}
-	return &State{
+	ret := &State{
 		nodes:  make(map[string]*Node),
 		db:     db,
 		driver: driver,
-	}, nil
-}
-
-func (s *State) GetNode(label string) (*Node, error) {
-	return s.getNode(s.db, label)
-}
-
-// Some methods common to sql.DB and sql.Tx. Feel free to extend as needed.
-type sqlSession interface {
-	QueryRow(query string, args ...interface{}) *sql.Row
-}
-
-// version of GetNode that uses a sqlSession, rather than acting directly
-// on s.db.
-func (s *State) getNode(sess sqlSession, label string) (*Node, error) {
-	node, ok := s.nodes[label]
-	if ok {
-		return node, nil
 	}
-	obmInfo := []byte{}
-	version := uint64(0)
-	err := sess.QueryRow(
-		`SELECT obm_info, version
-		FROM nodes
-		WHERE label = ?`,
-		label,
-	).Scan(&obmInfo, &version)
+	rows, err := db.Query(`SELECT label, obm_info, version FROM nodes`)
 	if err != nil {
 		return nil, err
 	}
-	node, err = NewNode(label, s.driver, obmInfo)
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			label   string
+			info    []byte
+			version uint64
+		)
+		err = rows.Scan(&label, &info, &version)
+		if err != nil {
+			return nil, err
+		}
+		node, err := NewNode(driver, info, version)
+		if err != nil {
+			return nil, err
+		}
+		ret.nodes[label] = node
+	}
+	err = rows.Err()
 	if err != nil {
-		s.nodes[label] = node
+		return nil, err
+	}
+	for _, node := range ret.nodes {
+		node.StartOBM()
+	}
+	ret.check()
+	return ret, nil
+}
+
+func (s *State) check() {
+	for label, node := range s.nodes {
+		if node == nil {
+			panic("Node " + label + " is nil!")
+		}
+	}
+}
+
+// Clean up resources used by the State. Does not close the database.
+func (s *State) Close() error {
+	for _, node := range s.nodes {
+		node.StopOBM()
+	}
+	return nil
+}
+
+func (s *State) GetNode(label string) (*Node, error) {
+	node, ok := s.nodes[label]
+	if !ok {
+		return nil, ErrNoSuchNode
 	}
 	return node, nil
 }
 
-func (s *State) SetNode(label string, info []byte) (*Node, error) {
-	tx, err := s.db.Begin()
+func (s *State) NewNode(label string, info []byte, version uint64) (*Node, error) {
+	_, err := s.GetNode(label)
+	if err == nil {
+		return nil, ErrNodeExists
+	}
+	// Node doesn't exist; create it.
+	node, err := NewNode(s.driver, info, version)
 	if err != nil {
 		return nil, err
 	}
-	node, err := s.getNode(tx, label)
-	switch err {
-	case sql.ErrNoRows:
-		// Node doesn't exist; create it.
-		node, err := NewNode(label, s.driver, info)
-		if err != nil {
-			return nil, err
-		}
-		_, err = tx.Exec(
-			`INSERT INTO nodes(label, obm_info, version)
+	_, err = s.db.Exec(
+		`INSERT INTO nodes(label, obm_info, version)
 			VALUES (?, ?, ?)`,
-			label,
-			info,
-			0,
-		)
-		if err != nil {
-			node.ObmCancel()
-			tx.Rollback()
-			return nil, err
-		}
-		err = tx.Commit()
-		if err != nil {
-			node.ObmCancel()
-			return nil, err
-		}
-		s.nodes[label] = node
-		return node, nil
-	case nil:
-		// Node already exists; update the info and bump the version.
-		newVersion := node.Version + 1
-		_, err := tx.Exec(
-			`UPDATE nodes
-			SET (version, obm_info) = (?, ?)
-			WHERE label = ?`,
-			newVersion, info, label,
-		)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		newNode, err := NewNode(label, s.driver, info)
-		if err != nil {
-			tx.Rollback()
-			return nil, err
-		}
-		newNode.Version = newVersion
-		err = tx.Commit()
-		if err != nil {
-			newNode.ObmCancel()
-			return nil, err
-		}
-		node.ObmCancel()
-		s.nodes[label] = newNode
-		return newNode, nil
-	default:
-		tx.Rollback()
+		label,
+		info,
+		version,
+	)
+	if err != nil {
 		return nil, err
 	}
+	s.nodes[label] = node
+	node.StartOBM()
+	return node, nil
+}
+
+func (s *State) BumpNodeVersion(label string) error {
+	node, err := s.GetNode(label)
+	if err != nil {
+		return err
+	}
+	node.Version++
+	_, err = s.db.Exec(`UPDATE nodes SET version = ? WHERE label = ?`, node.Version, label)
+	if err != nil {
+		node.Version-- // back out the change.
+	}
+	return err
 }
 
 func (s *State) DeleteNode(label string) error {
+	var err error
 	node, ok := s.nodes[label]
 	if ok {
-		node.ObmCancel()
+		node.StopOBM()
 		delete(s.nodes, label)
+		_, err = s.db.Exec("DELETE FROM nodes WHERE label = ?", label)
 	}
-	_, err := s.db.Exec("DELETE FROM nodes WHERE label = ?", label)
 	return err
 }
