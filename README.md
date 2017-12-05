@@ -50,16 +50,23 @@ Request body:
 
 ```json
 {
-    "addr": "10.0.0.4",
-    "user": "ipmiuser",
-    "pass": "ipmipass"
+    "type": "ipmi",
+    "info": {
+        "addr": "10.0.0.4",
+        "user": "ipmiuser",
+        "pass": "ipmipass"
+    }
 }
 ```
 
 Notes:
 
+* The above is for ipmi controllers; right now this is the only
+  "real" driver, but there are other possible values of `"type"`
+  that are used for testing/development. For those, see the
+  relevant source under `./internal/driver`.
 * The `node_id` is an arbitrary label.
-* The fields in the body of the request are passed directly to ipmitool
+* The fields in the `info` field are passed directly to ipmitool
 * If the node already exists, the information will be updated.
 
 ### Checking the version of a node
