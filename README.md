@@ -69,60 +69,21 @@ Notes:
 * The fields in the `info` field are passed directly to ipmitool
 * If the node already exists, the information will be updated.
 
-### Checking the version of a node
+### Unregistering a node
 
-`GET /node/{node_id}/version`
+`DELETE /node/{node_id}`.
 
-Response body
+Notes:
 
-```json
-{
-    "version": 7
-}
-```
-
-Get the current version of a node.
-
-### Updating the version of a node
-
-`PUT /node/{node_id}/version`
-
-Request body:
-
-```json
-{
-    "version": 7
-}
-```
-
-Update the version number of the node, disconnecting any existing
-clients and invalidating any tokens.  The version number in the request
-body must be `$current_version_number + 1`; otherwise an error will be
-returned and the version will not be updated. Returns the updated
-version number. (which should be the same as in the body of the
-request).
-
-Response body:
-
-```json
-{
-    "version": 7
-}
-```
+* This implicitly invalidates any active tokens.
 
 ### Getting a new console token
 
 Request body:
 
-`POST /node/{node_id}/console-endpoints`
+`POST /node/{node_id}/token`
 
-```json
-{
-    "version": 3
-}
-```
-
-Response body (success):
+Response body:
 
 ```json
 {
@@ -130,23 +91,12 @@ Response body (success):
 }
 ```
 
-Response body (failure):
-
-```json
-{
-    "version": 4
-}
-```
-
 Notes:
 
-* The version in the request must match the current version of the node.
-* The token in a successful response is to be used to view the console.
-* In the case of a version-mismatch, the response body will return the
-  correct version.
+* The token in a successful response is to be used to authenticate
+  non-admin operations, described below.
 
 ## Non-admin operations
-
 
 ### Viewing the console
 
@@ -157,17 +107,6 @@ Notes:
 * The `<token>` is fetched as described above
 * Data from the console will begin streaming from the response body.
 
-# Extras
-
-* If the `-dummydialer` cli option is passed, rather than launching
-  ipmitool, the server will simply open a tcp connection to the
-  "addr" specified (in which case it should be of the form required
-  by [net.Dial][net.Dial]. This is useful for experimentation.
-* There's some preliminary work on supporting a database, but it isn't
-  actually used. The `-dbpath` argument sets the path, but the db won't
-  be used beyond initializing a schema.
-
 [net.Dial]: https://golang.org/pkg/net/#Dial
-
 [travis]: https://travis-ci.org/zenhack/console-service
 [travis-img]: https://travis-ci.org/zenhack/console-service.svg?branch=master
