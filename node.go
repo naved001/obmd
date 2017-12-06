@@ -10,16 +10,14 @@ import (
 
 // Information about a node
 type Node struct {
-	Version      uint64             // The node's version; incremented on each change.
 	ConnInfo     []byte             // Connection info for this node's OBM.
 	ObmCancel    context.CancelFunc // stop the OBM
 	OBM          driver.OBM         // OBM for this node.
 	CurrentToken Token              // Token for regular user operations.
 }
 
-// Returns a new node with the given driver information, at version 0, with no
-// valid token.
-func NewNode(d driver.Driver, info []byte, version uint64) (*Node, error) {
+// Returns a new node with the given driver information, with no valid token.
+func NewNode(d driver.Driver, info []byte) (*Node, error) {
 	obm, err := d.GetOBM(info)
 	if err != nil {
 		return nil, err
@@ -27,7 +25,6 @@ func NewNode(d driver.Driver, info []byte, version uint64) (*Node, error) {
 	ret := &Node{
 		OBM:      obm,
 		ConnInfo: info,
-		Version:  version,
 	}
 	copy(ret.CurrentToken[:], noToken[:])
 	return ret, nil

@@ -7,10 +7,9 @@ import (
 )
 
 var (
-	ErrNodeExists      = errors.New("Node already exists.")
-	ErrNoSuchNode      = errors.New("No such node.")
-	ErrInvalidToken    = errors.New("Invalid token.")
-	ErrVersionConflict = errors.New("Version conflict")
+	ErrNodeExists   = errors.New("Node already exists.")
+	ErrNoSuchNode   = errors.New("No such node.")
+	ErrInvalidToken = errors.New("Invalid token.")
 )
 
 type Daemon struct {
@@ -37,69 +36,43 @@ func (d *Daemon) SetNode(label string, info []byte) error {
 
 	d.state.check()
 
-	node, err := d.state.GetNode(label)
+	_, err := d.state.GetNode(label)
 	if err == nil {
-		// The node already exists; store the version, delete it, then
-		// re-create it.
-		version := node.Version
+		// The node already exists; delete it before (re)createing it.
 		if err = d.state.DeleteNode(label); err != nil {
 			return err
 		}
-		// The node has been modified, so increment the version.
-		_, err = d.state.NewNode(label, info, version+1)
-	} else {
-		// The node doesn't exist; just create it with version = 0
-		_, err = d.state.NewNode(label, info, 0)
 	}
+	// Create the node.
+	_, err = d.state.NewNode(label, info)
 
 	d.state.check()
 	return err
 }
 
-func (d *Daemon) GetNodeVersion(label string) (version uint64, err error) {
-	d.Lock()
-	defer d.Unlock()
-	d.state.check()
-	node, err := d.state.GetNode(label)
-	if err != nil {
-		return 0, err
-	}
-	return node.Version, err
-}
-
-func (d *Daemon) SetNodeVersion(label string, version uint64) (newVersion uint64, err error) {
-	d.Lock()
-	defer d.Unlock()
-	var node *Node
-	node, err = d.state.GetNode(label)
-	if err != nil {
-		return 0, err
-	}
-	if version != node.Version+1 {
-		return node.Version, ErrVersionConflict
-	}
-	err = d.state.BumpNodeVersion(label)
-	if err == nil {
-		node.OBM.DropConsole()
-	}
-	return node.Version, err
-}
-
-func (d *Daemon) GetNodeToken(label string, version uint64) (Token, uint64, error) {
+func (d *Daemon) GetNodeToken(label string) (Token, error) {
 	d.Lock()
 	defer d.Unlock()
 	node, err := d.state.GetNode(label)
 	if err != nil {
-		return Token{}, 0, err
-	}
-	if version != node.Version {
-		return Token{}, node.Version, ErrVersionConflict
+		return Token{}, err
 	}
 	token, err := node.NewToken()
 	if err != nil {
-		return Token{}, node.Version, err
+		return Token{}, err
 	}
-	return token, node.Version, nil
+	return token, nil
+}
+
+func (d *Daemon) InvalidateNodeToken(label string) error {
+	d.Lock()
+	defer d.Unlock()
+	node, err := d.state.GetNode(label)
+	if err != nil {
+		return err
+	}
+	node.ClearToken()
+	return nil
 }
 
 func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error) {

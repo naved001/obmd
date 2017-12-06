@@ -10,8 +10,7 @@ import (
 // connections.
 //
 // This is basically a map[string]*Node, except that it (a) persists changes in
-// metadata to a database, (b) will shutdown/initialize OBMs as needed, and (c)
-// will update the node version number when changes are made.
+// metadata to a database, and (b) will shutdown/initialize OBMs as needed
 //
 // Note that this is not thread-safe.
 type State struct {
@@ -24,8 +23,7 @@ type State struct {
 func NewState(db *sql.DB, driver driver.Driver) (*State, error) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS nodes (
 		label VARCHAR(80) PRIMARY KEY,
-		obm_info TEXT NOT NULL,
-		version BIGINT NOT NULL
+		obm_info TEXT NOT NULL
 	)`)
 	if err != nil {
 		return nil, err
@@ -35,22 +33,21 @@ func NewState(db *sql.DB, driver driver.Driver) (*State, error) {
 		db:     db,
 		driver: driver,
 	}
-	rows, err := db.Query(`SELECT label, obm_info, version FROM nodes`)
+	rows, err := db.Query(`SELECT label, obm_info FROM nodes`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			label   string
-			info    []byte
-			version uint64
+			label string
+			info  []byte
 		)
-		err = rows.Scan(&label, &info, &version)
+		err = rows.Scan(&label, &info)
 		if err != nil {
 			return nil, err
 		}
-		node, err := NewNode(driver, info, version)
+		node, err := NewNode(driver, info)
 		if err != nil {
 			return nil, err
 		}
@@ -91,22 +88,21 @@ func (s *State) GetNode(label string) (*Node, error) {
 	return node, nil
 }
 
-func (s *State) NewNode(label string, info []byte, version uint64) (*Node, error) {
+func (s *State) NewNode(label string, info []byte) (*Node, error) {
 	_, err := s.GetNode(label)
 	if err == nil {
 		return nil, ErrNodeExists
 	}
 	// Node doesn't exist; create it.
-	node, err := NewNode(s.driver, info, version)
+	node, err := NewNode(s.driver, info)
 	if err != nil {
 		return nil, err
 	}
 	_, err = s.db.Exec(
-		`INSERT INTO nodes(label, obm_info, version)
-			VALUES (?, ?, ?)`,
+		`INSERT INTO nodes(label, obm_info)
+			VALUES (?, ?)`,
 		label,
 		info,
-		version,
 	)
 	if err != nil {
 		return nil, err
@@ -114,19 +110,6 @@ func (s *State) NewNode(label string, info []byte, version uint64) (*Node, error
 	s.nodes[label] = node
 	node.StartOBM()
 	return node, nil
-}
-
-func (s *State) BumpNodeVersion(label string) error {
-	node, err := s.GetNode(label)
-	if err != nil {
-		return err
-	}
-	node.Version++
-	_, err = s.db.Exec(`UPDATE nodes SET version = ? WHERE label = ?`, node.Version, label)
-	if err != nil {
-		node.Version-- // back out the change.
-	}
-	return err
 }
 
 func (s *State) DeleteNode(label string) error {

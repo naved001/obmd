@@ -11,12 +11,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// HTTP request/response body for the calls that include version information.
-type VersionArgs struct {
-	// Expected version number.
-	Version uint64 `json:"version"`
-}
-
 // request body for the power cycle call
 type PowerCycleArgs struct {
 	Force bool `json:"force"`
@@ -34,17 +28,6 @@ type ConnInfo struct {
 
 	// Driver-specific connection info:
 	Info []byte
-}
-
-// Convert v to JSON. This is a convienence wrapper around json.Marshal,
-// which returns an error even though for this data type it can't ever
-// fail.
-func (v VersionArgs) asJson() []byte {
-	data, err := json.Marshal(v)
-	if err != nil {
-		panic("BUG: json marshaling failed: " + err.Error())
-	}
-	return data
 }
 
 // Response body for successful new token requests.
@@ -67,25 +50,9 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		case ErrInvalidToken:
 			w.WriteHeader(http.StatusUnauthorized)
-		case ErrVersionConflict:
-			w.WriteHeader(http.StatusConflict)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Unexpected error returned (%s): %v\n", context, err)
-		}
-	}
-
-	// Helper for responses which call for a version in the response.
-	relayVersionError := func(w http.ResponseWriter, context string, version uint64, err error) {
-		switch err {
-		case nil, ErrVersionConflict:
-			// Report the version to the client
-			w.Header().Set("Content-Type", "application/json")
-			relayError(w, "daemon.GetNodeVersion()", err)
-			w.Write(VersionArgs{Version: version}.asJson())
-		default:
-			// Otherwise, just fall back to whatever relayError does
-			relayError(w, "daemon.GetNodeVersion()", err)
 		}
 	}
 
@@ -137,41 +104,23 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			relayError(w, "daemon.DeleteNode()", daemon.DeleteNode(nodeId(req)))
 		})
 
-	adminR.Methods("GET").Path("/node/{node_id}/version").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			version, err := daemon.GetNodeVersion(nodeId(req))
-			relayVersionError(w, "daemon.GetNodeVersion()", version, err)
-		})
-
-	adminR.Methods("PUT").Path("/node/{node_id}/version").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			args := VersionArgs{}
-			err := json.NewDecoder(req.Body).Decode(&args)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			version, err := daemon.SetNodeVersion(nodeId(req), args.Version)
-			relayVersionError(w, "daemon.SetNodeVersion()", version, err)
-		})
-
 	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			args := VersionArgs{}
-			err := json.NewDecoder(req.Body).Decode(&args)
+			token, err := daemon.GetNodeToken(nodeId(req))
 			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			token, version, err := daemon.GetNodeToken(nodeId(req), args.Version)
-			if err != nil {
-				relayVersionError(w, "daemon.GetNodeToken()", version, err)
+				relayError(w, "daemon.GetNodeToken()", err)
 			} else {
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(&TokenResp{
 					Token: token,
 				})
 			}
+		})
+
+	adminR.Methods("DELETE").Path("/node/{node_id}/token").
+		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			err := daemon.InvalidateNodeToken(nodeId(req))
+			relayError(w, "daemon.InvalidateNodeToken()", err)
 		})
 
 	// ------ "Regular user" requests ------

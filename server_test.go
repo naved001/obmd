@@ -13,9 +13,6 @@ import (
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
 var adminRequests = []requestSpec{
-	{"PUT", "http://localhost:8080/node/somenode/version", `{
-		"version": 2
-	}`},
 	{"PUT", "http://localhost:8080/node/somenode", `{
 		"type": "ipmi",
 		"info": {
@@ -24,16 +21,9 @@ var adminRequests = []requestSpec{
 			"pass": "secret"
 		}
 	}`},
-	{"PUT", "http://localhost:8080/node/somenode/version", `{
-		"version": 1
-	}`},
-	{"POST", "http://localhost:80080/node/somenode/console-endpoints", `{
-		"version": 1
-	}`},
+	{"POST", "http://localhost:80080/node/somenode/console-endpoints", ""},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
-	{"PUT", "http://localhost:8080/node/somenode/version", `{
-		"version": 2
-	}`},
+	{"DELETE", "http://localhost:8080/node/somenode/token", ""},
 }
 
 // Verify: all admin-only requests should return 404 when made without
@@ -56,7 +46,7 @@ func TestAdminNoAuth(t *testing.T) {
 func TestAdminGoodAuth(t *testing.T) {
 	handler := newHandler()
 
-	expected := []int{404, 200, 200, 200, 200, 404}
+	expected := []int{200, 200, 200, 404}
 
 	for i, v := range adminRequests {
 		req := v.toAdminAuth()
@@ -67,76 +57,6 @@ func TestAdminGoodAuth(t *testing.T) {
 			t.Fatalf("Unexpected status code for authenticated adminRequests[%d]; "+
 				"wanted %d but got %d", i, expected[i], actual)
 		}
-	}
-}
-
-// This tests for correct mitigation of a race condition where a daemon acting on behalf of an
-// admin has two handlers being executed in parallel: one that revokes or changes access to a
-// node, and one that creates a console access token for it. The race condition in question is:
-//
-// 1. Console-token granting admin handler verifies credentials of its user
-// 2. Access-revoking admin handler revokes access
-// 3. Console-token granting admin handler generates an access token, and returns it to the
-//    user, granting access to a node that should have been revoked.
-//
-// We mitigate this by including a version number that the admin handler believes is
-// current part of the token granting request; step (2) will have changed the version,
-// and so the console server will detect the descrepency, rejecting the request.
-func TestOwnerRace(t *testing.T) {
-	handler := newHandler()
-
-	// preliminary requests; a node is created, and the version is bumped
-	// twice.
-	setupRequests := []requestSpec{
-		{"PUT", "http://localhost/node/somenode", `{
-			"type": "ipmi",
-			"info": {
-				"addr": "10.0.0.3",
-				"user": "ipmiuser",
-				"pass": "secret"
-			}
-		}`},
-		{"PUT", "http://localhost/node/somenode/version", `{
-			"version": 1
-		}`},
-		{"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
-		}`},
-	}
-	for i, v := range setupRequests {
-		req := v.toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
-		status := resp.Result().StatusCode
-		if status != http.StatusOK {
-			t.Fatalf("During setup in TestOwnerRace: Request #%d: %v failed with status %d.",
-				i, v, status)
-		}
-	}
-
-	// Now, try to request a token with version 0. This should fail with a 409 CONFLICT status,
-	// as the current version should be 2.
-	req := httptest.NewRequest("POST", "http://localhost/node/somenode/console-endpoints",
-		bytes.NewBuffer([]byte(`{"version": 0}`)))
-	tokenText, err := theConfig.AdminToken.MarshalText()
-	if err != nil {
-		panic(err)
-	}
-	req.SetBasicAuth("admin", string(tokenText))
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	result := resp.Result()
-	if result.StatusCode != http.StatusConflict {
-		t.Fatalf("Version mismatch did not result in an HTTP 409 CONFLICT "+
-			"(Got %v instead).", result.StatusCode)
-	}
-	version := VersionArgs{}
-	err = json.NewDecoder(result.Body).Decode(&version)
-	if err != nil {
-		t.Fatal("Error decoding body of response:", err)
-	}
-	if version.Version != 2 {
-		t.Fatal("Unexpected version number; expected 2 but got", version.Version)
 	}
 }
 
@@ -163,9 +83,7 @@ func TestViewConsole(t *testing.T) {
 		t.Fatalf("During setup in TestViewConsole: Request %v failed with status %d.",
 			spec, status)
 	}
-	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", `{
-		"version": 0
-	}`}).toAdminAuth()
+	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", ""}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	result := resp.Result()
@@ -214,9 +132,7 @@ func TestViewConsole(t *testing.T) {
 		}
 	}
 
-	req = (&requestSpec{"PUT", "http://localhost/node/somenode/version", `{
-		"version": 1
-	}`}).toAdminAuth()
+	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	result = resp.Result()
@@ -227,7 +143,7 @@ func TestViewConsole(t *testing.T) {
 	}
 	if status != http.StatusOK {
 		t.Fatalf(
-			"version bump request failed. http status = %d\nresponse body:\n\n%s",
+			"token revocation request failed. http status = %d\nresponse body:\n\n%s",
 			status, body,
 		)
 	}
@@ -249,85 +165,4 @@ func TestViewConsole(t *testing.T) {
 		t.Fatalf("Connection should have been closed, but we were able to successfully "+
 			"read data: %q", line)
 	}
-}
-
-// Check that bumping the version works if and only if the requested version is one greater
-// than the current version.
-func TestVersionMustBePlus1(t *testing.T) {
-	h := newHandler()
-
-	// Setup: register the node:
-	adminRequireStatus(t, h, http.StatusOK, requestSpec{
-		"PUT", "http://localhost/node/somenode", `{
-			"type": "ipmi",
-			"info": {
-				"addr": "10.0.0.3",
-				"user": "ipmiuser",
-				"pass": "secret"
-			}
-		}`,
-	})
-
-	// Starting version is zero , so this should fail:
-	adminRequireStatus(t, h, http.StatusConflict, requestSpec{
-		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
-		}`,
-	})
-
-	// But this correct:
-	adminRequireStatus(t, h, http.StatusOK, requestSpec{
-		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 1
-		}`,
-	})
-
-	// ...and now that the version has been bumped to 1, this should work:
-	adminRequireStatus(t, h, http.StatusOK, requestSpec{
-		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 2
-		}`,
-	})
-}
-
-func TestGetVersion(t *testing.T) {
-	h := newHandler()
-	args := VersionArgs{}
-
-	adminRequireStatus(t, h, http.StatusOK, requestSpec{
-		"PUT", "http://localhost/node/somenode", `{
-			"type": "ipmi",
-			"info": {
-				"addr": "10.0.0.3",
-				"user": "ipmiuser",
-				"pass": "secret"
-			}
-		}`,
-	})
-
-	// Helper for verifying the version.
-	expectVersion := func(expectedVersion uint64) {
-		resp := adminReq(h, requestSpec{"GET", "http://localhost/node/somenode/version", ""})
-		err := json.NewDecoder(resp.Body).Decode(&args)
-		if err != nil {
-			t.Fatal("Error decoding body:", err)
-		}
-		if args.Version != expectedVersion {
-			t.Fatal("Version is incorrect; expected",
-				expectedVersion, "but got", args.Version)
-		}
-	}
-
-	// The version starts at 0.
-	expectVersion(0)
-
-	// Bump it.
-	adminRequireStatus(t, h, http.StatusOK, requestSpec{
-		"PUT", "http://localhost/node/somenode/version", `{
-			"version": 1
-		}`,
-	})
-
-	// And check it again:
-	expectVersion(1)
 }
