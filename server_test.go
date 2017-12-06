@@ -148,12 +148,15 @@ func TestViewConsole(t *testing.T) {
 		)
 	}
 
+	// FIXME: the reasoning below is no longer sound, due to changes in the operation of the
+	// driver. We need to adjust this so it tests something actually valid.
+
 	// Clear out any buffered data:
 	bufReader.Discard(bufReader.Buffered())
 	// Now try to keep reading. The first of these *might* succeed, since the mock console
 	// goroutine may have made a call to write that we didn't match with a read before the
 	// server called Close(). But the second one should always fail; we should have been
-	// disconnected by the version bump, and the mock console goroutine should have seen
+	// disconnected by the revocation, and the mock console goroutine should have seen
 	// it on its next call to Write.
 	line, err := bufReader.ReadString('\n')
 	if err == nil {
