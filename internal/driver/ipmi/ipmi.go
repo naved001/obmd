@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/kr/pty"
 
@@ -45,7 +46,7 @@ type connInfo struct {
 type ipmitoolProcess struct {
 	info *connInfo
 	proc *os.Process
-	r    io.ReadCloser
+	conn io.ReadWriteCloser
 }
 
 // An server manages a single ipmi controller.
@@ -56,21 +57,32 @@ type server struct {
 
 // Cleanly disconnect from the console.
 //
-// This kills the running ipmitool process, and then makes a call to
-// deactivate sol.
+// This injects the shutdown command ".~" into the the impitool process's Stdin,
+// and then after a grace period, kills the process.
 func (p *ipmitoolProcess) Shutdown() error {
-	p.proc.Signal(syscall.SIGTERM)
+	_, errWrite := p.conn.Write([]byte("~.\n"))
+	errClose := p.conn.Close()
+
+	// Give the ipmitool process a few seconds to shut down, then kill it
+	// if it's still awake, cleanly if possible, uncleanly if necessary.
+	termTimer := time.AfterFunc(3*time.Second, func() {
+		p.proc.Signal(syscall.SIGTERM)
+	})
+	killTimer := time.AfterFunc(6*time.Second, func() {
+		p.proc.Signal(syscall.SIGKILL)
+	})
+	defer termTimer.Stop()
+	defer killTimer.Stop()
 	p.proc.Wait()
-	errDeactivate := p.info.ipmitool("sol", "deactivate").Run()
-	errClose := p.r.Close()
-	if errDeactivate != nil {
-		return errDeactivate
+
+	if errWrite != nil {
+		return errWrite
 	}
 	return errClose
 }
 
 func (p *ipmitoolProcess) Reader() io.Reader {
-	return p.r
+	return p.conn
 }
 
 func (info *connInfo) Dial() (coordinator.Proc, error) {
@@ -80,7 +92,7 @@ func (info *connInfo) Dial() (coordinator.Proc, error) {
 		return nil, err
 	}
 	return &ipmitoolProcess{
-		r:    stdio,
+		conn: stdio,
 		proc: cmd.Process,
 		info: info,
 	}, nil
