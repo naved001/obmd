@@ -58,7 +58,8 @@ type server struct {
 // Cleanly disconnect from the console.
 //
 // This injects the shutdown command ".~" into the the impitool process's Stdin,
-// and then after a grace period, kills the process.
+// and then after a grace period, kills the process. It also runs ipmitool ...
+// sol deactivate which (imperically) is necessary on some OBMs, but not all.
 func (p *ipmitoolProcess) Shutdown() error {
 	_, errWrite := p.conn.Write([]byte("~.\n"))
 	errClose := p.conn.Close()
@@ -74,9 +75,14 @@ func (p *ipmitoolProcess) Shutdown() error {
 	defer termTimer.Stop()
 	defer killTimer.Stop()
 	p.proc.Wait()
+	errDeactivate := p.info.ipmitool("sol", "deactivate").Run()
 
+	// TODO: we should probably be a bit more principled about which
+	// error we return here.
 	if errWrite != nil {
 		return errWrite
+	} else if errDeactivate != nil {
+		return errDeactivate
 	}
 	return errClose
 }
