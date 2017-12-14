@@ -16,9 +16,7 @@ var Driver driver.Driver = mockDriver{}
 type mockDriver struct{}
 
 type mockInfo struct {
-	Addr string `json:"addr"`
-	User string `json:"user"`
-	Pass string `json:"pass"`
+	NumWrites int
 }
 
 type server struct {
@@ -27,11 +25,15 @@ type server struct {
 }
 
 type proc struct {
+	done chan struct{}
 	conn net.Conn
 }
 
 func (p *proc) Shutdown() error {
-	return p.conn.Close()
+	err := p.conn.Close()
+	<-p.done
+	p.done = nil
+	return err
 }
 
 func (p *proc) Reader() io.Reader {
@@ -53,14 +55,21 @@ func (mockDriver) GetOBM(info []byte) (driver.OBM, error) {
 func (info *mockInfo) Dial() (coordinator.Proc, error) {
 	myConn, theirConn := net.Pipe()
 
+	done := make(chan struct{})
+
 	go func() {
 		var err error
 		for err == nil {
-			_, err = fmt.Fprintf(myConn, "%q:%q:%q\n", info.Addr, info.User, info.Pass)
+			_, err = fmt.Fprintf(myConn, "%d\n", info.NumWrites)
+			info.NumWrites++
 		}
+		done <- struct{}{}
 	}()
 
-	return &proc{theirConn}, nil
+	return &proc{
+		done: done,
+		conn: theirConn,
+	}, nil
 }
 
 func (*server) PowerOff() error             { panic("Not Implemented") }

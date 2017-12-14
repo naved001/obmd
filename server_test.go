@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
@@ -83,59 +85,72 @@ func TestViewConsole(t *testing.T) {
 		t.Fatalf("During setup in TestViewConsole: Request %v failed with status %d.",
 			spec, status)
 	}
-	req = (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", ""}).toAdminAuth()
-	resp = httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	result := resp.Result()
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("TestConsoleView: getting token failed with status %d.", result.StatusCode)
-	}
-	var respBody TokenResp
-	err := json.NewDecoder(result.Body).Decode(&respBody)
-	if err != nil {
-		t.Fatalf("Decoding body in TestViewConsole: %v", err)
-	}
-	textToken, err := respBody.Token.MarshalText()
-	if err != nil {
-		t.Fatalf("Formatting token in TestViewConsole: %v", err)
-	}
-
-	req = httptest.NewRequest(
-		"GET",
-		"http://localhost/node/somenode/console?token="+string(textToken),
-		bytes.NewBuffer(nil),
-	)
-
-	r, w := io.Pipe()
-	respStreamer := &responseStreamer{
-		header: make(http.Header),
-		body:   w,
-	}
-
-	go func() {
-		handler.ServeHTTP(respStreamer, req)
-		w.Close()
-	}()
-
-	bufReader := bufio.NewReader(r)
-	for i := 0; i < 10; i++ {
-		line, err := bufReader.ReadString('\n')
-		if err == io.EOF {
-			t.Logf("Request status: %d", respStreamer.code)
+	getToken := func() string {
+		req := (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", ""}).toAdminAuth()
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		result := resp.Result()
+		if result.StatusCode != http.StatusOK {
+			t.Fatalf("TestConsoleView: getting token failed with status %d.", result.StatusCode)
 		}
+		var respBody TokenResp
+		err := json.NewDecoder(result.Body).Decode(&respBody)
 		if err != nil {
-			t.Fatalf("Error reading from console: %v", err)
+			t.Fatalf("Decoding body in TestViewConsole: %v", err)
 		}
-		expected := `"10.0.0.3":"ipmiuser":"secret"` + "\n"
-		if line != expected {
-			t.Fatalf("Unexpected data read from console: %q", line)
+		textToken, err := respBody.Token.MarshalText()
+		if err != nil {
+			t.Fatalf("Formatting token in TestViewConsole: %v", err)
 		}
+		return string(textToken)
 	}
 
+	streamConsole := func(token string) io.ReadCloser {
+		req := httptest.NewRequest(
+			"GET",
+			"http://localhost/node/somenode/console?token="+token,
+			bytes.NewBuffer(nil),
+		)
+
+		r, w := io.Pipe()
+		respStreamer := &responseStreamer{
+			header: make(http.Header),
+			body:   w,
+		}
+
+		go func() {
+			handler.ServeHTTP(respStreamer, req)
+			w.Close()
+		}()
+		return r
+	}
+
+	numReadsFirstClient := make(chan int)
+	go func() {
+		r := bufio.NewReader(streamConsole(getToken()))
+		i := 0
+		defer func() { numReadsFirstClient <- i }()
+		for {
+			line, err := r.ReadString('\n')
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("Error reading from console: %v", err)
+			}
+			expected := fmt.Sprintf("%d\n", i)
+			if line != expected {
+				t.Fatalf("Unexpected data read from console. Wanted %q but got %q",
+					expected, line)
+			}
+			i++
+		}
+	}()
+	time.Sleep(time.Second)
 	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
 	resp = httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
-	result = resp.Result()
+	result := resp.Result()
 	status = result.StatusCode
 	body, err := ioutil.ReadAll(result.Body)
 	if err != nil {
@@ -148,24 +163,24 @@ func TestViewConsole(t *testing.T) {
 		)
 	}
 
-	// FIXME: the reasoning below is no longer sound, due to changes in the operation of the
-	// driver. We need to adjust this so it tests something actually valid.
-
-	// Clear out any buffered data:
-	bufReader.Discard(bufReader.Buffered())
-	// Now try to keep reading. The first of these *might* succeed, since the mock console
-	// goroutine may have made a call to write that we didn't match with a read before the
-	// server called Close(). But the second one should always fail; we should have been
-	// disconnected by the revocation, and the mock console goroutine should have seen
-	// it on its next call to Write.
-	line, err := bufReader.ReadString('\n')
-	if err == nil {
-		t.Logf("Read another line (%q) after the connection was closed; "+
-			"no cause for alarm.", line)
+	r := bufio.NewReader(streamConsole(getToken()))
+	line, err := r.ReadString('\n')
+	if err != nil {
+		t.Fatal("Error reading from console:", err)
 	}
-	line, err = bufReader.ReadString('\n')
-	if err == nil {
-		t.Fatalf("Connection should have been closed, but we were able to successfully "+
-			"read data: %q", line)
+	var readsSecond int
+	n, err := fmt.Sscanf(line, "%d\n", &readsSecond)
+	if err != nil {
+		t.Fatalf("Error parsing output %q from console: %v", line, err)
+	}
+	if n != 1 {
+		t.Fatal("Incorrect number of items parsed by Sscanf:", n)
+	}
+
+	readsFirst := <-numReadsFirstClient
+	if readsFirst >= readsSecond {
+		t.Fatal("First console reader read a line that was not before "+
+			"what was read by the second reader:",
+			readsFirst, "vs.", readsSecond)
 	}
 }
