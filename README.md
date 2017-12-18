@@ -96,6 +96,16 @@ Notes:
 * The token in a successful response is to be used to authenticate
   non-admin operations, described below.
 
+### Invalidating a console token
+
+`DELETE /node/{node_id}/token`
+
+Notes:
+
+* This operation always returns a successful error code (assuming the
+  user authenticates correctly); if there is no existing valid token for
+  the node, this is a no-op.
+
 ## Non-admin operations
 
 ### Viewing the console

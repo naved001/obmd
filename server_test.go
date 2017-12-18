@@ -23,7 +23,7 @@ var adminRequests = []requestSpec{
 			"pass": "secret"
 		}
 	}`},
-	{"POST", "http://localhost:8080/node/somenode/console-endpoints", ""},
+	{"POST", "http://localhost:8080/node/somenode/token", ""},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
 	{"DELETE", "http://localhost:8080/node/somenode/token", ""},
 }
@@ -86,7 +86,7 @@ func TestViewConsole(t *testing.T) {
 			spec, status)
 	}
 	getToken := func() string {
-		req := (&requestSpec{"POST", "http://localhost/node/somenode/console-endpoints", ""}).toAdminAuth()
+		req := (&requestSpec{"POST", "http://localhost/node/somenode/token", ""}).toAdminAuth()
 		resp := httptest.NewRecorder()
 		handler.ServeHTTP(resp, req)
 		result := resp.Result()

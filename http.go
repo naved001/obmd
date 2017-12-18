@@ -104,7 +104,7 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			relayError(w, "daemon.DeleteNode()", daemon.DeleteNode(nodeId(req)))
 		})
 
-	adminR.Methods("POST").Path("/node/{node_id}/console-endpoints").
+	adminR.Methods("POST").Path("/node/{node_id}/token").
 		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			token, err := daemon.GetNodeToken(nodeId(req))
 			if err != nil {
