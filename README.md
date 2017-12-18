@@ -108,14 +108,73 @@ Notes:
 
 ## Non-admin operations
 
+Each non-admin operation requires a `token` parameter in the query
+string, like:
+
+`GET /url/for/operation?token={token}`
+
+Where `{token}` is fetched as described above. This parameter is not
+explicitly mentioned in each of the descriptions below.
+
 ### Viewing the console
 
-`GET /node/{node_id}/console?token=<token>`
+`GET /node/{node_id}/console`
 
 Notes:
 
-* The `<token>` is fetched as described above
-* Data from the console will begin streaming from the response body.
+* Data from the console will begin streaming from the response body, and
+  continue doing so until the connection is closed.
+
+### Rebooting a node
+
+`POST /node/{node_id}/power_cycle`
+
+Request body:
+
+```json
+{
+    "force": true
+}
+```
+
+Power cycle the given node.
+
+Notes:
+
+* If `"force"` is set to `true`, The node will be forced off. Otherwise,
+  the node will be sent an ACPI shutdown request, which the operating
+  system may respond to.
+* If the node is powered off, this will turn it on.
+
+### Powering off a node
+
+`POST /node/{node_id}/power_off`
+
+Notes:
+
+* Powers off the node. If the node is already powered off, this will
+  have no effect.
+
+### Setting the boot device
+
+`PUT /node/{node_id}/boot_device`
+
+Request body:
+
+```json
+{
+    "bootdev": "disk"
+}
+```
+
+Notes:
+
+* This sets the node's boot device persistently.
+* The set of legal values for `"bootdev"` depends on the type of OBM.
+* For IPMI devices, the legal values are:
+  * `"pxe"`: Do a PXE (network) boot.
+  * `"disk"`: Boot from local hard disk.
+  * `"none"`: Reset boot order to default.
 
 [net.Dial]: https://golang.org/pkg/net/#Dial
 [travis]: https://travis-ci.org/zenhack/console-service
