@@ -38,7 +38,7 @@ func (d *Daemon) SetNode(label string, info []byte) error {
 
 	_, err := d.state.GetNode(label)
 	if err == nil {
-		// The node already exists; delete it before (re)createing it.
+		// The node already exists; delete it before (re)creating it.
 		if err = d.state.DeleteNode(label); err != nil {
 			return err
 		}

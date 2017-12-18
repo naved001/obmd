@@ -23,7 +23,7 @@ var adminRequests = []requestSpec{
 			"pass": "secret"
 		}
 	}`},
-	{"POST", "http://localhost:80080/node/somenode/console-endpoints", ""},
+	{"POST", "http://localhost:8080/node/somenode/console-endpoints", ""},
 	{"DELETE", "http://localhost:8080/node/somenode", ""},
 	{"DELETE", "http://localhost:8080/node/somenode/token", ""},
 }
