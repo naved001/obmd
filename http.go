@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"github.com/zenhack/obmd/internal/driver"
 )
 
 // request body for the power cycle call
@@ -50,6 +52,8 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		case ErrInvalidToken:
 			w.WriteHeader(http.StatusUnauthorized)
+		case driver.ErrInvalidBootdev:
+			w.WriteHeader(http.StatusBadRequest)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Unexpected error returned (%s): %v\n", context, err)

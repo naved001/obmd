@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/zenhack/obmd/internal/driver/mock"
 )
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
@@ -17,7 +18,7 @@ var adminRequests = []requestSpec{
 	{"PUT", "http://localhost:8080/node/somenode", `{
 		"type": "ipmi",
 		"info": {
-			"host": "10.0.0.3",
+			"addr": "10.0.0.3",
 			"user": "ipmiuser",
 			"pass": "secret"
 		}
@@ -136,5 +137,108 @@ func TestViewConsole(t *testing.T) {
 		t.Fatal("First console reader read a line that was not before "+
 			"what was read by the second reader:",
 			readsFirst, "vs.", readsSecond)
+	}
+}
+
+func TestPowerActions(t *testing.T) {
+	handler := newHandler()
+	makeNode(t, handler, "somenode", `{
+		"type": "ipmi",
+		"info": {
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}
+	}`)
+	token := getToken(t, handler, "somenode")
+
+	badToken, _ := Token{}.MarshalText() // All zeros
+
+	testCases := []struct {
+		context string
+		token   string
+		status  int
+		action  mock.PowerAction
+		request requestSpec
+	}{
+		// Power off the node, and make sure that the operation went through.
+		{
+			"power off",
+			token,
+			http.StatusOK,
+			mock.Off,
+			requestSpec{"POST", "/node/somenode/power_off", ""},
+		},
+		// Try to reboot the node with a bad token.
+		{
+			"power cycle (invalid token)",
+			string(badToken),
+			http.StatusUnauthorized,
+			mock.Off, // should be unchanged.
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": false}`,
+			},
+		},
+		// Now do it with the right token:
+		{
+			"power cycle (force, with good token)",
+			token,
+			http.StatusOK,
+			mock.ForceReboot,
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": true}`,
+			},
+		},
+		// Check the other operations:
+		{
+			"power cycle (soft, with good token)",
+			token,
+			http.StatusOK,
+			mock.SoftReboot,
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": false}`,
+			},
+		},
+		{
+			"set bootdev to A",
+			token,
+			http.StatusOK,
+			mock.BootDevA,
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "A"}`,
+			},
+		},
+		{
+			"set bootdev to B",
+			token,
+			http.StatusOK,
+			mock.BootDevA,
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "A"}`,
+			},
+		},
+		{
+			"set bootdev to something invalid.",
+			token,
+			http.StatusBadRequest,
+			mock.BootDevA, // should be unchanged.
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "invalid"}`,
+			},
+		},
+	}
+
+	for _, v := range testCases {
+		resp := tokenReq(handler, v.token, v.request)
+		status := resp.Result().StatusCode
+		if status != v.status {
+			t.Fatalf("%s: Unexpected status code; wanted %d but got %d.",
+				v.context, v.status, status)
+		}
+		action := mock.LastPowerActions["10.0.0.3"]
+		if action != v.action {
+			t.Fatalf("%s: Incorrect power action; wanted %s but got %s.",
+				v.context, v.action, action)
+		}
 	}
 }

@@ -1,3 +1,6 @@
+// Package mock implements a mock driver for testing purposes.
+//
+// Valid boot devices are "A" and "B".
 package mock
 
 import (
@@ -5,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/zenhack/obmd/internal/driver"
 	"github.com/zenhack/obmd/internal/driver/coordinator"
@@ -12,10 +16,28 @@ import (
 
 var Driver driver.Driver = mockDriver{}
 
+type PowerAction string
+
+const (
+	Off         PowerAction = "off"
+	ForceReboot             = "force-reboot"
+	SoftReboot              = "soft-reboot"
+	BootDevA                = "bootdev-a"
+	BootDevB                = "bootdev-b"
+)
+
+var (
+	// A mapping from node addrs (the "addr" field in the obm info) to the last power action
+	// that was preformed on the OBM.
+	LastPowerActions     = map[string]PowerAction{}
+	lastPowerActionsLock sync.Mutex
+)
+
 // Mock driver for use in tests
 type mockDriver struct{}
 
 type mockInfo struct {
+	Addr      string `json:"addr"`
 	NumWrites int
 }
 
@@ -72,6 +94,34 @@ func (info *mockInfo) Dial() (coordinator.Proc, error) {
 	}, nil
 }
 
-func (*server) PowerOff() error             { panic("Not Implemented") }
-func (*server) PowerCycle(force bool) error { panic("Not Implemented") }
-func (*server) SetBootdev(dev string) error { panic("Not Implemented") }
+func (s *server) setPowerAction(action PowerAction) {
+	lastPowerActionsLock.Lock()
+	defer lastPowerActionsLock.Unlock()
+	LastPowerActions[s.info.Addr] = action
+}
+
+func (s *server) PowerOff() error {
+	s.setPowerAction(Off)
+	return nil
+}
+func (s *server) PowerCycle(force bool) error {
+	if force {
+		s.setPowerAction(ForceReboot)
+		return nil
+	} else {
+		s.setPowerAction(SoftReboot)
+		return nil
+	}
+}
+
+func (s *server) SetBootdev(dev string) error {
+	switch dev {
+	case "A":
+		s.setPowerAction(BootDevA)
+		return nil
+	case "B":
+		s.setPowerAction(BootDevB)
+		return nil
+	}
+	return driver.ErrInvalidBootdev
+}

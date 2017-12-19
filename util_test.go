@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -127,7 +128,7 @@ func adminRequireStatus(t *testing.T, handler http.Handler, expectedStatus int, 
 	}
 }
 
-// Make the specified request, and return a ResponseRecorder with the response.
+// Make the specified request as admin, and return a ResponseRecorder with the response.
 func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder {
 	req := spec.toAdminAuth()
 	resp := httptest.NewRecorder()
@@ -135,11 +136,21 @@ func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder
 	return resp
 }
 
+// Like adminReq, but (a) doesn't authenticate as admin, and (b) adds the query string
+// ?token=<token> to the url.
+func tokenReq(handler http.Handler, token string, spec requestSpec) *httptest.ResponseRecorder {
+	spec.url += "?token=" + token
+	req := spec.toNoAuth()
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	return resp
+}
+
 // Check if resp has the expected http status. If not, fail the test, incorporating context into
 // the error message.
-func requireStatus(t *testing.T, context string, resp *httpTest.ResponseRecoder, expected int) {
-	result := resp.Result().StatusCode()
-	actual := result.StatusCode()
+func requireStatus(t *testing.T, context string, resp *httptest.ResponseRecorder, expected int) {
+	result := resp.Result()
+	actual := result.StatusCode
 	body, err := ioutil.ReadAll(result.Body)
 	if err != nil {
 		t.Fatal("Error reading response body:", err)
