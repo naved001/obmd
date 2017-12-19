@@ -76,9 +76,7 @@ func (r *requestSpec) toAdminAuth() *http.Request {
 // Get a token for the given node, using handler as the server. If anything goes wrong,
 // the test is aborted.
 func getToken(t *testing.T, handler http.Handler, nodeId string) string {
-	req := (&requestSpec{"POST", "http://localhost/node/" + nodeId + "/token", ""}).toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := adminReq(handler, requestSpec{"POST", "http://localhost/node/" + nodeId + "/token", ""})
 	result := resp.Result()
 	if result.StatusCode != http.StatusOK {
 		t.Fatalf("getting token failed with status %d.", result.StatusCode)
@@ -99,9 +97,7 @@ func getToken(t *testing.T, handler http.Handler, nodeId string) string {
 // goes wrong.
 func makeNode(t *testing.T, handler http.Handler, nodeId string, nodeInfo string) {
 	spec := requestSpec{"PUT", "http://localhost/node/" + nodeId, nodeInfo}
-	req := spec.toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := adminReq(handler, spec)
 	status := resp.Result().StatusCode
 	if status != http.StatusOK {
 		t.Fatalf("In makeNode: Request %v failed with status %d.",

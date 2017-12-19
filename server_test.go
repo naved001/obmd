@@ -50,9 +50,7 @@ func TestAdminGoodAuth(t *testing.T) {
 	expected := []int{200, 200, 200, 404}
 
 	for i, v := range adminRequests {
-		req := v.toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
+		resp := adminReq(handler, v)
 		actual := resp.Result().StatusCode
 		if actual != expected[i] {
 			t.Fatalf("Unexpected status code for authenticated adminRequests[%d]; "+
@@ -116,9 +114,7 @@ func TestViewConsole(t *testing.T) {
 		}
 	}()
 	time.Sleep(time.Second)
-	req := (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := adminReq(handler, requestSpec{"DELETE", "http://localhost/node/somenode/token", ""})
 	result := resp.Result()
 	status := result.StatusCode
 	body, err := ioutil.ReadAll(result.Body)
