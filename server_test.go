@@ -115,18 +115,7 @@ func TestViewConsole(t *testing.T) {
 	}()
 	time.Sleep(time.Second)
 	resp := adminReq(handler, requestSpec{"DELETE", "http://localhost/node/somenode/token", ""})
-	result := resp.Result()
-	status := result.StatusCode
-	body, err := ioutil.ReadAll(result.Body)
-	if err != nil {
-		t.Fatal("Error reading response body:", err)
-	}
-	if status != http.StatusOK {
-		t.Fatalf(
-			"token revocation request failed. http status = %d\nresponse body:\n\n%s",
-			status, body,
-		)
-	}
+	requireStatus(t, "Invalidating token", resp, http.StatusOK)
 
 	r := bufio.NewReader(streamConsole(getToken(t, handler, "somenode")))
 	line, err := r.ReadString('\n')

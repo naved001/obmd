@@ -134,3 +134,18 @@ func adminReq(handler http.Handler, spec requestSpec) *httptest.ResponseRecorder
 	handler.ServeHTTP(resp, req)
 	return resp
 }
+
+// Check if resp has the expected http status. If not, fail the test, incorporating context into
+// the error message.
+func requireStatus(t *testing.T, context string, resp *httpTest.ResponseRecoder, expected int) {
+	result := resp.Result().StatusCode()
+	actual := result.StatusCode()
+	body, err := ioutil.ReadAll(result.Body)
+	if err != nil {
+		t.Fatal("Error reading response body:", err)
+	}
+	if actual != expected {
+		t.Fatalf("%s: Unepected status code: %d (wanted %d). Response body:\n%s",
+			context, actual, expected, body)
+	}
+}
