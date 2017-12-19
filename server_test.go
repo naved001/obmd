@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -66,44 +65,14 @@ func TestAdminGoodAuth(t *testing.T) {
 // revoked.
 func TestViewConsole(t *testing.T) {
 	handler := newHandler()
-
-	spec := requestSpec{
-		"PUT", "http://localhost/node/somenode", `{
-			"type": "ipmi",
-			"info": {
-				"addr": "10.0.0.3",
-				"user": "ipmiuser",
-				"pass": "secret"
-			}
-		}`,
-	}
-	req := spec.toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	status := resp.Result().StatusCode
-	if status != http.StatusOK {
-		t.Fatalf("During setup in TestViewConsole: Request %v failed with status %d.",
-			spec, status)
-	}
-	getToken := func() string {
-		req := (&requestSpec{"POST", "http://localhost/node/somenode/token", ""}).toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
-		result := resp.Result()
-		if result.StatusCode != http.StatusOK {
-			t.Fatalf("TestConsoleView: getting token failed with status %d.", result.StatusCode)
+	makeNode(t, handler, "somenode", `{
+		"type": "ipmi",
+		"info": {
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
 		}
-		var respBody TokenResp
-		err := json.NewDecoder(result.Body).Decode(&respBody)
-		if err != nil {
-			t.Fatalf("Decoding body in TestViewConsole: %v", err)
-		}
-		textToken, err := respBody.Token.MarshalText()
-		if err != nil {
-			t.Fatalf("Formatting token in TestViewConsole: %v", err)
-		}
-		return string(textToken)
-	}
+	}`)
 
 	streamConsole := func(token string) io.ReadCloser {
 		req := httptest.NewRequest(
@@ -127,7 +96,7 @@ func TestViewConsole(t *testing.T) {
 
 	numReadsFirstClient := make(chan int)
 	go func() {
-		r := bufio.NewReader(streamConsole(getToken()))
+		r := bufio.NewReader(streamConsole(getToken(t, handler, "somenode")))
 		i := 0
 		defer func() { numReadsFirstClient <- i }()
 		for {
@@ -147,11 +116,11 @@ func TestViewConsole(t *testing.T) {
 		}
 	}()
 	time.Sleep(time.Second)
-	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
-	resp = httptest.NewRecorder()
+	req := (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
+	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 	result := resp.Result()
-	status = result.StatusCode
+	status := result.StatusCode
 	body, err := ioutil.ReadAll(result.Body)
 	if err != nil {
 		t.Fatal("Error reading response body:", err)
@@ -163,7 +132,7 @@ func TestViewConsole(t *testing.T) {
 		)
 	}
 
-	r := bufio.NewReader(streamConsole(getToken()))
+	r := bufio.NewReader(streamConsole(getToken(t, handler, "somenode")))
 	line, err := r.ReadString('\n')
 	if err != nil {
 		t.Fatal("Error reading from console:", err)
