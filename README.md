@@ -42,7 +42,7 @@ Each admin operation requires the client to authenticate using basic
 auth, with a username of "admin" and a password equal to the
 "AdminToken" in the config file.
 
-### Registering or updating a node
+### Registering a node
 
 `PUT /node/{node_id}`
 
@@ -67,7 +67,8 @@ Notes:
   relevant source under `./internal/driver`.
 * The `node_id` is an arbitrary label.
 * The fields in the `info` field are passed directly to ipmitool
-* If the node already exists, the information will be updated.
+* If the node already exists, this will return an error. To change
+  the info for a node, you must delete it and re-register it.
 
 ### Unregistering a node
 
