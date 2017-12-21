@@ -26,11 +26,26 @@ func (t Token) MarshalText() ([]byte, error) {
 }
 
 func (t *Token) UnmarshalText(text []byte) error {
+	if len(text) != 2*len(t[:]) {
+		// wrong number of characters.
+		return ErrInvalidToken
+	}
+	for _, char := range text {
+		if !isHexDigit(char) {
+			return ErrInvalidToken
+		}
+	}
 	var buf []byte
 	_, err := fmt.Fscanf(bytes.NewBuffer(text), "%32x", &buf)
 	if err != nil {
-		return fmt.Errorf("Error unmarshalling token: %v", err)
+		return ErrInvalidToken
 	}
 	copy(t[:], buf)
 	return nil
+}
+
+func isHexDigit(char byte) bool {
+	return char >= '0' && char <= '9' ||
+		char >= 'a' && char <= 'f' ||
+		char >= 'A' && char <= 'F'
 }
