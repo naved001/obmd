@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+
+	"github.com/zenhack/obmd/internal/driver"
 )
 
 // request body for the power cycle call
@@ -50,6 +52,8 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			w.WriteHeader(http.StatusNotFound)
 		case ErrInvalidToken:
 			w.WriteHeader(http.StatusUnauthorized)
+		case driver.ErrInvalidBootdev:
+			w.WriteHeader(http.StatusBadRequest)
 		default:
 			w.WriteHeader(http.StatusInternalServerError)
 			log.Printf("Unexpected error returned (%s): %v\n", context, err)
@@ -60,11 +64,6 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	// req was matched by a route that had "{node_id}" somewhere in its path.
 	nodeId := func(req *http.Request) string {
 		return mux.Vars(req)["node_id"]
-	}
-
-	getToken := func(req *http.Request) (token Token, err error) {
-		err = (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
-		return token, err
 	}
 
 	// Router for admin-only requests. Because we validate the admin token here,
@@ -125,14 +124,23 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 
 	// ------ "Regular user" requests ------
 
-	r.Methods("GET").Path("/node/{node_id}/console").
-		HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			token, err := getToken(req)
+	// Helper which extracts the token from the query string, and passes it to the "real"
+	// handler. Note that this doesn't check the validity of the token, merely parses it.
+	withToken := func(handler func(http.ResponseWriter, *http.Request, *Token)) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			var token Token
+			err := (&token).UnmarshalText([]byte(req.URL.Query().Get("token")))
 			if err != nil {
 				relayError(w, "getToken()", err)
 				return
 			}
-			conn, err := daemon.DialNodeConsole(nodeId(req), &token)
+			handler(w, req, &token)
+		})
+	}
+
+	r.Methods("GET").Path("/node/{node_id}/console").
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
+			conn, err := daemon.DialNodeConsole(nodeId(req), token)
 			if err != nil {
 				relayError(w, "daemon.DialNodeConsole()", err)
 			} else {
@@ -159,65 +167,36 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 					log.Println("Error reading from console:", err)
 				}
 			}
-		})
-
-	return r
-}
-
-/*
-// Create an HTTP handler for the core logic of our system, using the provided
-// configuration and the driver for establishing connections.
-func makeHandler(config *Config, driver driver.Driver, db *sql.DB) (http.Handler, error) {
-
-	r.Methods("POST").Path("/node/{node_id}/power_off").
-		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
-			err := dialer.PowerOff(mux.Vars(req)["node_id"], token)
-			if err != nil {
-				log.Println("power_off:", err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
 		}))
 
 	r.Methods("POST").Path("/node/{node_id}/power_cycle").
-		Handler(withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
 			var args PowerCycleArgs
 			err := json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			err = daemon.PowerCycleNode(nodeId(req), args.Force, token)
+			relayError(w, "daemon.PowerCycleNode()", err)
+		}))
 
-			err = dialer.PowerCycle(&node.Ipmi, args.Force)
-			if err != nil {
-				log.Println("power_cycle:", err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
+	r.Methods("POST").Path("/node/{node_id}/power_off").
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
+			relayError(w, "daemon.PowerOff()", daemon.PowerOffNode(nodeId(req), token))
 		}))
 
 	r.Methods("PUT").Path("/node/{node_id}/boot_device").
-		Handler(withValidToken(func(w http.ResponseWriter, req *http.Request, node *Node) {
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
 			var args SetBootdevArgs
 			err := json.NewDecoder(req.Body).Decode(&args)
 			if err != nil {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-
-			err = dialer.SetBootdev(&node.Ipmi, args.Dev)
-			switch err {
-			case ErrInvalidBootdev:
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte(err.Error()))
-			case nil:
-				// Success!
-				return
-			default:
-				log.Println("set_bootdev:", err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
+			err = daemon.SetNodeBootDev(nodeId(req), args.Dev, token)
+			relayError(w, "daemon.SetNodeBootDev()", err)
 		}))
 
-
-	return r, nil
+	return r
 }
-*/

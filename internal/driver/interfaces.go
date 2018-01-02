@@ -25,9 +25,8 @@ type OBM interface {
 	// respond).
 	PowerCycle(force bool) error
 
-	// Sets the next boot device to `dev`. TODO: document valid boot
-	// devices. We should decide whether devices are per-driver or the
-	// same globally.
+	// Sets the next boot device to `dev`. Valid boot devices are
+	// driver-dependent.
 	SetBootdev(dev string) error
 }
 

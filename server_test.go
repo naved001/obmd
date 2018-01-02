@@ -3,14 +3,14 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/zenhack/obmd/internal/driver/mock"
 )
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.
@@ -18,7 +18,7 @@ var adminRequests = []requestSpec{
 	{"PUT", "http://localhost:8080/node/somenode", `{
 		"type": "ipmi",
 		"info": {
-			"host": "10.0.0.3",
+			"addr": "10.0.0.3",
 			"user": "ipmiuser",
 			"pass": "secret"
 		}
@@ -51,9 +51,7 @@ func TestAdminGoodAuth(t *testing.T) {
 	expected := []int{200, 200, 200, 404}
 
 	for i, v := range adminRequests {
-		req := v.toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
+		resp := adminReq(handler, v)
 		actual := resp.Result().StatusCode
 		if actual != expected[i] {
 			t.Fatalf("Unexpected status code for authenticated adminRequests[%d]; "+
@@ -66,44 +64,14 @@ func TestAdminGoodAuth(t *testing.T) {
 // revoked.
 func TestViewConsole(t *testing.T) {
 	handler := newHandler()
-
-	spec := requestSpec{
-		"PUT", "http://localhost/node/somenode", `{
-			"type": "ipmi",
-			"info": {
-				"addr": "10.0.0.3",
-				"user": "ipmiuser",
-				"pass": "secret"
-			}
-		}`,
-	}
-	req := spec.toAdminAuth()
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	status := resp.Result().StatusCode
-	if status != http.StatusOK {
-		t.Fatalf("During setup in TestViewConsole: Request %v failed with status %d.",
-			spec, status)
-	}
-	getToken := func() string {
-		req := (&requestSpec{"POST", "http://localhost/node/somenode/token", ""}).toAdminAuth()
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, req)
-		result := resp.Result()
-		if result.StatusCode != http.StatusOK {
-			t.Fatalf("TestConsoleView: getting token failed with status %d.", result.StatusCode)
+	makeNode(t, handler, "somenode", `{
+		"type": "ipmi",
+		"info": {
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
 		}
-		var respBody TokenResp
-		err := json.NewDecoder(result.Body).Decode(&respBody)
-		if err != nil {
-			t.Fatalf("Decoding body in TestViewConsole: %v", err)
-		}
-		textToken, err := respBody.Token.MarshalText()
-		if err != nil {
-			t.Fatalf("Formatting token in TestViewConsole: %v", err)
-		}
-		return string(textToken)
-	}
+	}`)
 
 	streamConsole := func(token string) io.ReadCloser {
 		req := httptest.NewRequest(
@@ -127,7 +95,7 @@ func TestViewConsole(t *testing.T) {
 
 	numReadsFirstClient := make(chan int)
 	go func() {
-		r := bufio.NewReader(streamConsole(getToken()))
+		r := bufio.NewReader(streamConsole(getToken(t, handler, "somenode")))
 		i := 0
 		defer func() { numReadsFirstClient <- i }()
 		for {
@@ -147,23 +115,10 @@ func TestViewConsole(t *testing.T) {
 		}
 	}()
 	time.Sleep(time.Second)
-	req = (&requestSpec{"DELETE", "http://localhost/node/somenode/token", ""}).toAdminAuth()
-	resp = httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-	result := resp.Result()
-	status = result.StatusCode
-	body, err := ioutil.ReadAll(result.Body)
-	if err != nil {
-		t.Fatal("Error reading response body:", err)
-	}
-	if status != http.StatusOK {
-		t.Fatalf(
-			"token revocation request failed. http status = %d\nresponse body:\n\n%s",
-			status, body,
-		)
-	}
+	resp := adminReq(handler, requestSpec{"DELETE", "http://localhost/node/somenode/token", ""})
+	requireStatus(t, "Invalidating token", resp, http.StatusOK)
 
-	r := bufio.NewReader(streamConsole(getToken()))
+	r := bufio.NewReader(streamConsole(getToken(t, handler, "somenode")))
 	line, err := r.ReadString('\n')
 	if err != nil {
 		t.Fatal("Error reading from console:", err)
@@ -182,5 +137,108 @@ func TestViewConsole(t *testing.T) {
 		t.Fatal("First console reader read a line that was not before "+
 			"what was read by the second reader:",
 			readsFirst, "vs.", readsSecond)
+	}
+}
+
+func TestPowerActions(t *testing.T) {
+	handler := newHandler()
+	makeNode(t, handler, "somenode", `{
+		"type": "ipmi",
+		"info": {
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}
+	}`)
+	token := getToken(t, handler, "somenode")
+
+	badToken, _ := Token{}.MarshalText() // All zeros
+
+	testCases := []struct {
+		context string
+		token   string
+		status  int
+		action  mock.PowerAction
+		request requestSpec
+	}{
+		// Power off the node, and make sure that the operation went through.
+		{
+			"power off",
+			token,
+			http.StatusOK,
+			mock.Off,
+			requestSpec{"POST", "/node/somenode/power_off", ""},
+		},
+		// Try to reboot the node with a bad token.
+		{
+			"power cycle (invalid token)",
+			string(badToken),
+			http.StatusUnauthorized,
+			mock.Off, // should be unchanged.
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": false}`,
+			},
+		},
+		// Now do it with the right token:
+		{
+			"power cycle (force, with good token)",
+			token,
+			http.StatusOK,
+			mock.ForceReboot,
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": true}`,
+			},
+		},
+		// Check the other operations:
+		{
+			"power cycle (soft, with good token)",
+			token,
+			http.StatusOK,
+			mock.SoftReboot,
+			requestSpec{
+				"POST", "/node/somenode/power_cycle", `{"force": false}`,
+			},
+		},
+		{
+			"set bootdev to A",
+			token,
+			http.StatusOK,
+			mock.BootDevA,
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "A"}`,
+			},
+		},
+		{
+			"set bootdev to B",
+			token,
+			http.StatusOK,
+			mock.BootDevA,
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "A"}`,
+			},
+		},
+		{
+			"set bootdev to something invalid.",
+			token,
+			http.StatusBadRequest,
+			mock.BootDevA, // should be unchanged.
+			requestSpec{
+				"PUT", "/node/somenode/boot_device", `{"bootdev": "invalid"}`,
+			},
+		},
+	}
+
+	for _, v := range testCases {
+		resp := tokenReq(handler, v.token, v.request)
+		status := resp.Result().StatusCode
+		if status != v.status {
+			t.Fatalf("%s: Unexpected status code; wanted %d but got %d.",
+				v.context, v.status, status)
+		}
+		action := mock.LastPowerActions["10.0.0.3"]
+		if action != v.action {
+			t.Fatalf("%s: Incorrect power action; wanted %s but got %s.",
+				v.context, v.action, action)
+		}
 	}
 }

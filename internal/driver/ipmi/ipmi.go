@@ -155,7 +155,7 @@ func (s *server) PowerCycle(force bool) (err error) {
 }
 
 // Set the boot device. Legal values are "disk", "pxe", and "none".
-// TODO: document what `none` indicates.
+// "none" resets the boot device to the configured default.
 func (s *server) SetBootdev(dev string) error {
 	if dev != "disk" && dev != "pxe" && dev != "none" {
 		return driver.ErrInvalidBootdev
