@@ -178,5 +178,5 @@ Notes:
   * `"none"`: Reset boot order to default.
 
 [net.Dial]: https://golang.org/pkg/net/#Dial
-[travis]: https://travis-ci.org/zenhack/console-service
-[travis-img]: https://travis-ci.org/zenhack/console-service.svg?branch=master
+[travis]: https://travis-ci.org/CCI-MOC/obmd
+[travis-img]: https://travis-ci.org/CCI-MOC/obmd.svg?branch=master
