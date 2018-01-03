@@ -10,7 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/zenhack/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver"
 )
 
 // request body for the power cycle call
