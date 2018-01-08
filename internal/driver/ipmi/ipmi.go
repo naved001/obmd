@@ -11,8 +11,8 @@ import (
 
 	"github.com/kr/pty"
 
-	"github.com/zenhack/obmd/internal/driver"
-	"github.com/zenhack/obmd/internal/driver/coordinator"
+	"github.com/CCI-MOC/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver/coordinator"
 )
 
 var Driver driver.Driver = impiDriver{}

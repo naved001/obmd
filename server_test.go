@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zenhack/obmd/internal/driver/mock"
+	"github.com/CCI-MOC/obmd/internal/driver/mock"
 )
 
 // adminRequests is a sequence of admin-only requests that is used by various tests.

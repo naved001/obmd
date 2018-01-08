@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 
-	"github.com/zenhack/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver"
 )
 
 // Persistent store for node info, + ephemeral tracking of live OBM

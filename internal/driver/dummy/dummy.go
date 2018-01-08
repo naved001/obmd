@@ -8,7 +8,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/zenhack/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver"
 )
 
 var Driver driver.Driver = dummyDriver{}

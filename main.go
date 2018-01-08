@@ -12,9 +12,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/zenhack/obmd/internal/driver"
-	"github.com/zenhack/obmd/internal/driver/dummy"
-	"github.com/zenhack/obmd/internal/driver/ipmi"
+	"github.com/CCI-MOC/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver/dummy"
+	"github.com/CCI-MOC/obmd/internal/driver/ipmi"
 )
 
 // Contents of the config file

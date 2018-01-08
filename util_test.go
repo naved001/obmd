@@ -12,9 +12,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/zenhack/obmd/internal/driver"
-	"github.com/zenhack/obmd/internal/driver/dummy"
-	"github.com/zenhack/obmd/internal/driver/mock"
+	"github.com/CCI-MOC/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver/dummy"
+	"github.com/CCI-MOC/obmd/internal/driver/mock"
 )
 
 var theConfig *Config

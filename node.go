@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 
-	"github.com/zenhack/obmd/internal/driver"
+	"github.com/CCI-MOC/obmd/internal/driver"
 )
 
 // Information about a node
