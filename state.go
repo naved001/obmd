@@ -100,7 +100,7 @@ func (s *State) NewNode(label string, info []byte) (*Node, error) {
 	}
 	_, err = s.db.Exec(
 		`INSERT INTO nodes(label, obm_info)
-			VALUES (?, ?)`,
+			VALUES ($1, $2)`,
 		label,
 		info,
 	)
@@ -118,7 +118,7 @@ func (s *State) DeleteNode(label string) error {
 	if ok {
 		node.StopOBM()
 		delete(s.nodes, label)
-		_, err = s.db.Exec("DELETE FROM nodes WHERE label = ?", label)
+		_, err = s.db.Exec("DELETE FROM nodes WHERE label = $1", label)
 	}
 	return err
 }

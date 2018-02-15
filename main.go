@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/CCI-MOC/obmd/internal/driver"
@@ -19,15 +20,15 @@ import (
 
 // Contents of the config file
 type Config struct {
+	DBType     string
+	DBPath     string
 	ListenAddr string
 	AdminToken Token
 }
 
 var (
 	configPath = flag.String("config", "config.json", "Path to config file")
-	dbPath     = flag.String("dbpath", ":memory:", "Path to sqlite database")
-
-	genToken = flag.Bool("gen-token", false,
+	genToken   = flag.Bool("gen-token", false,
 		"Generate a random token, instead of starting the daemon.")
 )
 
@@ -56,7 +57,8 @@ func main() {
 	chkfatal(err)
 	var config Config
 	chkfatal(json.Unmarshal(buf, &config))
-	db, err := sql.Open("sqlite3", *dbPath)
+	// DB Types: sqlite3 or postgres
+	db, err := sql.Open(config.DBType, config.DBPath)
 	chkfatal(err)
 	chkfatal(db.Ping())
 
