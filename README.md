@@ -16,10 +16,17 @@ A config file is needed, whose contents should look like:
 
 ```json
 {
+	"DBType":     "sqlite3",
+	"DBPath":     "sqlite:///obmd.db",
 	"ListenAddr": ":8080",
 	"AdminToken": "44d5ebcb1aae23bfefc8dca8314797eb"
 }
 ```
+
+The choices for database type are "sqlite3" and "postgres".
+If using postgres, the DBPath URI might look like:
+
+	"postgresql://username:password@localhost:5432/db-name"
 
 The admin token should be a (cryptographically randomly generated)
 128-bit value encoded in hexadecimal. You can generate such a token by
