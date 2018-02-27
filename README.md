@@ -23,10 +23,10 @@ A config file is needed, whose contents should look like:
 }
 ```
 
-The choices for database type are "sqlite3" and "postgres".
-If using postgres, the DBPath URI might look like:
+The choices for database type are `sqlite3` and `postgres`.
+If using postgres, the DBPath string might look like:
 
-	"postgresql://username:password@localhost:5432/db-name"
+	"host=localhost port=5432 user=username password=pass dbname=obmd"
 
 The admin token should be a (cryptographically randomly generated)
 128-bit value encoded in hexadecimal. You can generate such a token by
