@@ -17,7 +17,7 @@ A config file is needed, whose contents should look like:
 ```json
 {
 	"DBType":     "sqlite3",
-	"DBPath":     "sqlite:///obmd.db",
+	"DBPath":     "./obmd.db",
 	"ListenAddr": ":8080",
 	"AdminToken": "44d5ebcb1aae23bfefc8dca8314797eb"
 }
