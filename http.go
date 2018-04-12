@@ -205,17 +205,6 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 
 	r.Methods("GET").Path("/node/{node_id}/power_status").
 		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
-			//relayError(w, "daemon.GetNodePowerStatus()", daemon.GetNodePowerStatus(nodeId(req), token))
-			/*status, err := daemon.GetNodePowerStatus(nodeId(req), token)
-			if err != nil {
-				relayError(w, "daemon.GetNodeStatus()", err)
-			} else {
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(&PowerResp{
-					string: status,
-				})
-			}*/
-
 			conn, err := daemon.GetNodePowerStatus(nodeId(req), token)
 			if err != nil {
 				relayError(w, "daemon.GetNodePowerStatus()", err)
