@@ -62,7 +62,7 @@ func (d *dummyOBM) DialConsole() (io.ReadCloser, error) {
 }
 
 func (d *dummyOBM) PowerOff() error {
-	log.Println("Powering off:", d)
+	log.Println("Powering off: %v", d)
 	return nil
 }
 
@@ -74,4 +74,18 @@ func (d *dummyOBM) PowerCycle(force bool) error {
 func (d *dummyOBM) SetBootdev(dev string) error {
 	log.Printf("Setting bootdev = %v: %v\n", dev, d)
 	return nil
+}
+
+func (d *dummyOBM) GetPowerStatus() (io.ReadCloser, error) {
+	conn, err := net.Dial("tcp", d.Addr)
+	if err != nil {
+		return nil, err
+	}
+	_, err = fmt.Fprintln(conn, d)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	d.conn = conn
+	return conn, nil
 }

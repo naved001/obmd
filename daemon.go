@@ -124,3 +124,13 @@ func (d *Daemon) SetNodeBootDev(label string, dev string, token *Token) error {
 	}
 	return node.OBM.SetBootdev(dev)
 }
+
+func (d *Daemon) GetNodePowerStatus(label string, token *Token) (io.ReadCloser, error) {
+	d.Lock()
+	defer d.Unlock()
+	node, err := d.getNodeWithToken(label, token)
+	if err != nil {
+		return nil, err
+	}
+	return node.OBM.GetPowerStatus()
+}

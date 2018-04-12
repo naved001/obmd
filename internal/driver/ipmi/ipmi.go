@@ -162,3 +162,18 @@ func (s *server) SetBootdev(dev string) error {
 	}
 	return s.ipmitool("chassis", "bootdev", dev, "options=persistent")
 }
+
+// Get the server's power status.
+func (info *connInfo) GetPowerStatus() (coordinator.Proc, error) {
+	cmd := info.ipmitool("chassis", "power", "status")
+	stdio, err := pty.Start(cmd)
+	if err != nil {
+		return nil, err
+	}
+	return &ipmitoolProcess{
+		conn: stdio,
+		proc: cmd.Process,
+		info: info,
+	}, nil
+	//return s.ipmitool("chassis", "power", "status")
+}

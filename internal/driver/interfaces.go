@@ -28,9 +28,12 @@ type OBM interface {
 	// Sets the next boot device to `dev`. Valid boot devices are
 	// driver-dependent.
 	SetBootdev(dev string) error
+
+	// Gets the node's power status.
+	GetPowerStatus() (io.ReadCloser, error)
 }
 
-// An driver for a type of OBM.
+// A driver for a type of OBM.
 type Driver interface {
 	// Get an obm object based on the provided info.
 	GetOBM(info []byte) (OBM, error)

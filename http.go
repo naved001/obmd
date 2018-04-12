@@ -37,6 +37,11 @@ type TokenResp struct {
 	Token Token `json:"token"`
 }
 
+// Response body for successful node power status requests.
+type PowerResp struct {
+	string string `json:"power_status"`
+}
+
 func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	r := mux.NewRouter()
 
@@ -196,6 +201,48 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			}
 			err = daemon.SetNodeBootDev(nodeId(req), args.Dev, token)
 			relayError(w, "daemon.SetNodeBootDev()", err)
+		}))
+
+	r.Methods("GET").Path("/node/{node_id}/power_status").
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
+			//relayError(w, "daemon.GetNodePowerStatus()", daemon.GetNodePowerStatus(nodeId(req), token))
+			/*status, err := daemon.GetNodePowerStatus(nodeId(req), token)
+			if err != nil {
+				relayError(w, "daemon.GetNodeStatus()", err)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(&PowerResp{
+					string: status,
+				})
+			}*/
+
+			conn, err := daemon.GetNodePowerStatus(nodeId(req), token)
+			if err != nil {
+				relayError(w, "daemon.GetNodePowerStatus()", err)
+			} else {
+				defer conn.Close()
+				w.Header().Set("Content-Type", "application/octet-stream")
+
+				// Copy stream to the client. Unfortunately we can't just use
+				// io.Copy here, because we need to call Flush() between writes.
+				// otherwise, the client won't receive console data in a timely
+				// manner, because the ResponseWriter may buffer it.
+				var buf [4096]byte
+				for err == nil {
+					var n int
+					n, err = conn.Read(buf[:])
+					if n != 0 {
+						_, err = w.Write(buf[:n])
+					}
+					if flusher, ok := w.(http.Flusher); ok {
+						flusher.Flush()
+					}
+				}
+
+				if err != io.EOF {
+					log.Println("Error reading from console:", err)
+				}
+			}
 		}))
 
 	return r
