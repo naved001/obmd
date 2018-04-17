@@ -30,7 +30,7 @@ type OBM interface {
 	SetBootdev(dev string) error
 
 	// Gets the node's power status.
-	GetPowerStatus() (io.ReadCloser, error)
+	GetPowerStatus() (string, error)
 }
 
 // A driver for a type of OBM.

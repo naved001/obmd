@@ -76,16 +76,7 @@ func (d *dummyOBM) SetBootdev(dev string) error {
 	return nil
 }
 
-func (d *dummyOBM) GetPowerStatus() (io.ReadCloser, error) {
-	conn, err := net.Dial("tcp", d.Addr)
-	if err != nil {
-		return nil, err
-	}
-	_, err = fmt.Fprintln(conn, d)
-	if err != nil {
-		conn.Close()
-		return nil, err
-	}
-	d.conn = conn
-	return conn, nil
+func (d *dummyOBM) GetPowerStatus() (string, error) {
+	log.Printf("Status = %v: %v\n", "Dummy Status", d)
+	return "Dummy Status", nil
 }

@@ -100,24 +100,8 @@ func (s *server) setPowerAction(action PowerAction) {
 	LastPowerActions[s.info.Addr] = action
 }
 
-func (info *mockInfo) GetPowerStatus() (coordinator.Proc, error) {
-	myConn, theirConn := net.Pipe()
-
-	done := make(chan struct{})
-
-	go func() {
-		var err error
-		for err == nil {
-			_, err = fmt.Fprintf(myConn, "%d\n", info.NumWrites)
-			info.NumWrites++
-		}
-		done <- struct{}{}
-	}()
-
-	return &proc{
-		done: done,
-		conn: theirConn,
-	}, nil
+func (s *server) GetPowerStatus() (string, error) {
+	return "Mock Status", nil
 }
 
 func (s *server) PowerOff() error {

@@ -22,7 +22,6 @@ type OBM interface {
 	// Connect to the console, returning the managing Proc and an
 	// error, if any.
 	Dial() (Proc, error)
-	GetPowerStatus() (Proc, error)
 }
 
 // A request to connect to the console. If the request succeeds, the connection
@@ -63,8 +62,7 @@ type Server struct {
 	dropConsole chan struct{}
 
 	// Requests to connect to the console.
-	dialConsole    chan consoleReq
-	getPowerStatus chan consoleReq
+	dialConsole chan consoleReq
 
 	// Requests to run a function atomically within the server.
 	funcs chan func()
@@ -123,21 +121,6 @@ func (s *Server) Serve(ctx context.Context) {
 				Reader: proc.Reader(),
 			}
 			req.conn <- conn
-		case req := <-s.getPowerStatus:
-			stopProcess()
-			proc, err = s.obm.GetPowerStatus()
-			if err != nil {
-				req.err <- err
-				continue
-			}
-			conn = &consoleConn{
-				// Buffer size of 1, so calls to Close() on the connection
-				// don't block. Otherwise, if we've already dropped the
-				// connection, Close() would deadlock.
-				drop:   make(chan struct{}, 1),
-				Reader: proc.Reader(),
-			}
-			req.conn <- conn
 		}
 	}
 }
@@ -145,11 +128,10 @@ func (s *Server) Serve(ctx context.Context) {
 // Create a Server for the given OBM.
 func NewServer(obm OBM) *Server {
 	return &Server{
-		obm:            obm,
-		dropConsole:    make(chan struct{}),
-		dialConsole:    make(chan consoleReq),
-		getPowerStatus: make(chan consoleReq),
-		funcs:          make(chan func()),
+		obm:         obm,
+		dropConsole: make(chan struct{}),
+		dialConsole: make(chan consoleReq),
+		funcs:       make(chan func()),
 	}
 }
 
@@ -166,20 +148,6 @@ func (s *Server) DialConsole() (io.ReadCloser, error) {
 		conn: make(chan io.ReadCloser),
 	}
 	s.dialConsole <- req
-	select {
-	case err := <-req.err:
-		return nil, err
-	case conn := <-req.conn:
-		return conn, nil
-	}
-}
-
-func (s *Server) GetPowerStatus() (io.ReadCloser, error) {
-	req := consoleReq{
-		err:  make(chan error),
-		conn: make(chan io.ReadCloser),
-	}
-	s.getPowerStatus <- req
 	select {
 	case err := <-req.err:
 		return nil, err
