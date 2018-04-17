@@ -184,6 +184,14 @@ Notes:
   * `"disk"`: Boot from local hard disk.
   * `"none"`: Reset boot order to default.
 
+### Checking a node's power status
+
+`GET /node/{node_id}/power_status`
+
+Notes:
+
+* Returns a JSON string that describes the node's power state.
+
 [net.Dial]: https://golang.org/pkg/net/#Dial
 [travis]: https://travis-ci.org/CCI-MOC/obmd
 [travis-img]: https://travis-ci.org/CCI-MOC/obmd.svg?branch=master
