@@ -164,14 +164,11 @@ func (s *server) SetBootdev(dev string) error {
 }
 
 // Get the server's power status as a string.
-func (s *server) GetPowerStatus() (string, error) {
-	var status string
-	var errormsg error
+func (s *server) GetPowerStatus() (status string, err error) {
 	s.RunInServer(func() {
-		out, err := s.info.ipmitool("chassis", "power", "status").Output()
-		output := string(out)
-		status = output
-		errormsg = err
+		var out []byte
+		out, err = s.info.ipmitool("chassis", "power", "status").Output()
+		status = string(out)
 	})
-	return status, errormsg
+	return
 }

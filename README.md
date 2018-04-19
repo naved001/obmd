@@ -188,9 +188,18 @@ Notes:
 
 `GET /node/{node_id}/power_status`
 
+Response body:
+
+```json
+{
+    "power_status": "<IPMI chassis power status response>"
+}
+```
+
 Notes:
 
 * Returns a JSON string that describes the node's power state.
+* Response examples: "Chassis Power is on" or "Chassis Power is off"
 
 [net.Dial]: https://golang.org/pkg/net/#Dial
 [travis]: https://travis-ci.org/CCI-MOC/obmd
