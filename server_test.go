@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -160,9 +159,9 @@ func TestPowerStatus(t *testing.T) {
 	request := requestSpec{"GET",
 		"http://localhost/node/somenode/power_status", ""}
 	resp := tokenReq(handler, token, request)
-	body, _ := ioutil.ReadAll(resp.Body)
-	val := strings.Compare(string(body), testStringOff)
-	if val != 0 {
+	body, err := ioutil.ReadAll(resp.Body)
+	errpanic(err)
+	if string(body) != testStringOff {
 		t.Fatalf("GetPowerStatus: Incorrect power status; "+
 			"wanted %v but got %v.", testStringOff, string(body))
 	}
@@ -173,16 +172,17 @@ func TestPowerStatus(t *testing.T) {
 	}
 	// Power on ...
 	resp = tokenReq(handler, token, request)
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
 
 	// Get power status ...
 	request = requestSpec{"GET",
 		"http://localhost/node/somenode/power_status", ""}
 	resp = tokenReq(handler, token, request)
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
 
-	val = strings.Compare(string(body), testStringOn)
-	if val != 0 {
+	if string(body) != testStringOn {
 		t.Fatalf("GetPowerStatus: Incorrect power status; "+
 			"wanted %v but got %v.", testStringOn, string(body))
 	}
@@ -193,16 +193,17 @@ func TestPowerStatus(t *testing.T) {
 	}
 	// Power off ...
 	resp = tokenReq(handler, token, request)
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
 
 	// Get power status ...
 	request = requestSpec{"GET",
 		"http://localhost/node/somenode/power_status", ""}
 	resp = tokenReq(handler, token, request)
-	body, _ = ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
 
-	val = strings.Compare(string(body), testStringOff)
-	if val != 0 {
+	if string(body) != testStringOff {
 		t.Fatalf("GetPowerStatus: Incorrect power status; "+
 			"wanted %v but got %v.", testStringOff, string(body))
 	}
