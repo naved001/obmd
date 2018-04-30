@@ -16,6 +16,7 @@ import (
 	"github.com/CCI-MOC/obmd/internal/driver"
 	"github.com/CCI-MOC/obmd/internal/driver/dummy"
 	"github.com/CCI-MOC/obmd/internal/driver/ipmi"
+	"github.com/CCI-MOC/obmd/internal/driver/mock"
 )
 
 // Contents of the config file
@@ -68,6 +69,7 @@ func main() {
 		// TODO: maybe mask this behind a build tag, so it's not there
 		// in production builds:
 		"dummy": dummy.Driver,
+		"mock":  mock.Driver,
 	})
 	chkfatal(err)
 	srv := makeHandler(&config, NewDaemon(state))
