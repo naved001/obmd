@@ -170,7 +170,7 @@ func (s *server) GetPowerStatus() (status string, err error) {
 		var out []byte
 		out, err = s.info.ipmitool("chassis", "power", "status").Output()
 
-		if strings.HasSuffix(string(out), "on") {
+		if strings.Contains(string(out), "on") {
 			status = "on"
 		} else {
 			status = "off"
