@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -168,7 +169,12 @@ func (s *server) GetPowerStatus() (status string, err error) {
 	s.RunInServer(func() {
 		var out []byte
 		out, err = s.info.ipmitool("chassis", "power", "status").Output()
-		status = string(out)
+
+		if strings.HasSuffix(string(out), "on") {
+			status = "on"
+		} else {
+			status = "off"
+		}
 	})
 	return
 }
