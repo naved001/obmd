@@ -37,6 +37,11 @@ type TokenResp struct {
 	Token Token `json:"token"`
 }
 
+// Response body for successful node power status requests.
+type PowerResp struct {
+	Resp string `json:"power_status"`
+}
+
 func makeHandler(config *Config, daemon *Daemon) http.Handler {
 	r := mux.NewRouter()
 
@@ -198,5 +203,17 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			relayError(w, "daemon.SetNodeBootDev()", err)
 		}))
 
+	r.Methods("GET").Path("/node/{node_id}/power_status").
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
+			status, err := daemon.GetNodePowerStatus(nodeId(req), token)
+			if err != nil {
+				relayError(w, "daemon.GetNodePowerStatus()", err)
+			} else {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(&PowerResp{
+					Resp: status,
+				})
+			}
+		}))
 	return r
 }

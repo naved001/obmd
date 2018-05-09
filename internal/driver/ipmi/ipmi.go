@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -161,4 +162,19 @@ func (s *server) SetBootdev(dev string) error {
 		return driver.ErrInvalidBootdev
 	}
 	return s.ipmitool("chassis", "bootdev", dev, "options=persistent")
+}
+
+// Get the server's power status as a string.
+func (s *server) GetPowerStatus() (status string, err error) {
+	s.RunInServer(func() {
+		var out []byte
+		out, err = s.info.ipmitool("chassis", "power", "status").Output()
+
+		if strings.Contains(string(out), "on") {
+			status = "on"
+		} else {
+			status = "off"
+		}
+	})
+	return
 }

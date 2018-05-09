@@ -23,6 +23,7 @@ type dummyDriver struct {
 func (dummyDriver) GetOBM(info []byte) (driver.OBM, error) {
 	ret := dummyOBM{}
 	err := json.Unmarshal(info, &ret)
+	ret.PwrStatus = "off"
 	if err != nil {
 		return nil, err
 	}
@@ -30,8 +31,9 @@ func (dummyDriver) GetOBM(info []byte) (driver.OBM, error) {
 }
 
 type dummyOBM struct {
-	Addr string   `json:"addr"`
-	conn net.Conn `json:"-"`
+	Addr      string   `json:"addr"`
+	conn      net.Conn `json:"-"`
+	PwrStatus string
 }
 
 func (d *dummyOBM) Serve(ctx context.Context) {
@@ -63,15 +65,22 @@ func (d *dummyOBM) DialConsole() (io.ReadCloser, error) {
 
 func (d *dummyOBM) PowerOff() error {
 	log.Println("Powering off:", d)
+	d.PwrStatus = "off"
 	return nil
 }
 
 func (d *dummyOBM) PowerCycle(force bool) error {
-	log.Printf("Powering off: %v (force = %v)\n", d, force)
+	log.Printf("Power cycling: %v (force = %v)\n", d, force)
+	d.PwrStatus = "on"
 	return nil
 }
 
 func (d *dummyOBM) SetBootdev(dev string) error {
 	log.Printf("Setting bootdev = %v: %v\n", dev, d)
 	return nil
+}
+
+func (d *dummyOBM) GetPowerStatus() (string, error) {
+	log.Printf("Status = %v: %v\n", d.PwrStatus, d)
+	return d.PwrStatus, nil
 }

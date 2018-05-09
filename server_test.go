@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -138,6 +139,75 @@ func TestViewConsole(t *testing.T) {
 			"what was read by the second reader:",
 			readsFirst, "vs.", readsSecond)
 	}
+}
+
+func TestPowerStatus(t *testing.T) {
+	handler := newHandler()
+	makeNode(t, handler, "somenode", `{
+		"type": "dummy",
+		"info": {
+			"addr": "10.0.0.3",
+			"user": "ipmiuser",
+			"pass": "secret"
+		}
+	}`)
+	token := getToken(t, handler, "somenode")
+	testStringOn := string("{\"power_status\":\"on\"}\n")
+	testStringOff := string("{\"power_status\":\"off\"}\n")
+
+	// First make sure dummy node is off
+	request := requestSpec{"GET",
+		"http://localhost/node/somenode/power_status", ""}
+	resp := tokenReq(handler, token, request)
+	body, err := ioutil.ReadAll(resp.Body)
+	errpanic(err)
+	if string(body) != testStringOff {
+		t.Fatalf("GetPowerStatus: Incorrect power status; "+
+			"wanted %v but got %v.", testStringOff, string(body))
+	}
+
+	// Now test powering on
+	request = requestSpec{"POST",
+		"http://localhost/node/somenode/power_cycle", `{"force": false}`,
+	}
+	// Power on ...
+	resp = tokenReq(handler, token, request)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
+
+	// Get power status ...
+	request = requestSpec{"GET",
+		"http://localhost/node/somenode/power_status", ""}
+	resp = tokenReq(handler, token, request)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
+
+	if string(body) != testStringOn {
+		t.Fatalf("GetPowerStatus: Incorrect power status; "+
+			"wanted %v but got %v.", testStringOn, string(body))
+	}
+
+	// Now test powering off
+	request = requestSpec{"POST",
+		"http://localhost/node/somenode/power_off", "",
+	}
+	// Power off ...
+	resp = tokenReq(handler, token, request)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
+
+	// Get power status ...
+	request = requestSpec{"GET",
+		"http://localhost/node/somenode/power_status", ""}
+	resp = tokenReq(handler, token, request)
+	body, err = ioutil.ReadAll(resp.Body)
+	errpanic(err)
+
+	if string(body) != testStringOff {
+		t.Fatalf("GetPowerStatus: Incorrect power status; "+
+			"wanted %v but got %v.", testStringOff, string(body))
+	}
+
 }
 
 func TestPowerActions(t *testing.T) {
