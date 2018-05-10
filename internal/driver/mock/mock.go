@@ -72,8 +72,9 @@ func (mockDriver) GetOBM(info []byte) (driver.OBM, error) {
 	return ret, nil
 }
 
-// Connect to a mock console stream. It just writes "addr":"user":"pass" in a
-// loop until the connection is closed.
+// Connect to a mock console stream. The stream writes out increasing numeric
+// values 0, 1, 2, 3... one per line, in a loop until the connection is closed.
+// The count is preserved across connections.
 func (info *mockInfo) Dial() (coordinator.Proc, error) {
 	myConn, theirConn := net.Pipe()
 
