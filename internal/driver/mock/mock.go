@@ -101,6 +101,10 @@ func (s *server) setPowerAction(action PowerAction) {
 	LastPowerActions[s.info.Addr] = action
 }
 
+func (s *server) GetPowerStatus() (string, error) {
+	return "Mock Status", nil
+}
+
 func (s *server) PowerOff() error {
 	s.setPowerAction(Off)
 	return nil
