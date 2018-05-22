@@ -119,7 +119,7 @@ func (d *Daemon) PowerOnNode(label string, token *Token) error {
 
 func (d *Daemon) PowerOffNode(label string, token *Token) error {
 	err := d.usingNodeWithToken(label, token, func(n *Node) error {
-		return n.OBM.PowerOn()
+		return n.OBM.PowerOff()
 	})
 	if err != nil {
 		return err
