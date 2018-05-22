@@ -95,6 +95,16 @@ func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, err
 	return node.OBM.DialConsole()
 }
 
+func (d *Daemon) PowerOnNode(label string, token *Token) error {
+	d.Lock()
+	defer d.Unlock()
+	node, err := d.getNodeWithToken(label, token)
+	if err != nil {
+		return err
+	}
+	return node.OBM.PowerOn()
+}
+
 func (d *Daemon) PowerOffNode(label string, token *Token) error {
 	d.Lock()
 	defer d.Unlock()

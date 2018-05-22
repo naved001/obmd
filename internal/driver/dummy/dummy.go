@@ -63,6 +63,12 @@ func (d *dummyOBM) DialConsole() (io.ReadCloser, error) {
 	return conn, nil
 }
 
+func (d *dummyOBM) PowerOn() error {
+	log.Println("Powering on:", d)
+	d.PwrStatus = "on"
+	return nil
+}
+
 func (d *dummyOBM) PowerOff() error {
 	log.Println("Powering off:", d)
 	d.PwrStatus = "off"

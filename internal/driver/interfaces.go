@@ -17,6 +17,9 @@ type OBM interface {
 	// Disconnect the current console session, if any.
 	DropConsole() error
 
+	// Power on the node.
+	PowerOn() error
+
 	// Power off the node.
 	PowerOff() error
 

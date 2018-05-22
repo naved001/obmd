@@ -186,6 +186,11 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 			relayError(w, "daemon.PowerCycleNode()", err)
 		}))
 
+	r.Methods("POST").Path("/node/{node_id}/power_on").
+		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
+			relayError(w, "daemon.PowerOn()", daemon.PowerOnNode(nodeId(req), token))
+		}))
+
 	r.Methods("POST").Path("/node/{node_id}/power_off").
 		Handler(withToken(func(w http.ResponseWriter, req *http.Request, token *Token) {
 			relayError(w, "daemon.PowerOff()", daemon.PowerOffNode(nodeId(req), token))
