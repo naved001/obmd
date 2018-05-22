@@ -93,8 +93,7 @@ func (d *Daemon) usingNodeWithToken(label string, token *Token,
 	if err != nil {
 		return err
 	}
-	f(node)
-	return nil
+	return f(node)
 }
 
 func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, error) {
@@ -108,33 +107,21 @@ func (d *Daemon) DialNodeConsole(label string, token *Token) (io.ReadCloser, err
 }
 
 func (d *Daemon) PowerOnNode(label string, token *Token) error {
-	d.Lock()
-	defer d.Unlock()
-	node, err := d.getNodeWithToken(label, token)
-	if err != nil {
-		return err
-	}
-	return node.OBM.PowerOn()
+	return d.usingNodeWithToken(label, token, func(n *Node) error {
+		return n.OBM.PowerOn()
+	})
 }
 
 func (d *Daemon) PowerOffNode(label string, token *Token) error {
-	err := d.usingNodeWithToken(label, token, func(n *Node) error {
+	return d.usingNodeWithToken(label, token, func(n *Node) error {
 		return n.OBM.PowerOff()
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (d *Daemon) PowerCycleNode(label string, force bool, token *Token) error {
-	d.Lock()
-	defer d.Unlock()
-	node, err := d.getNodeWithToken(label, token)
-	if err != nil {
-		return err
-	}
-	return node.OBM.PowerCycle(force)
+	return d.usingNodeWithToken(label, token, func(n *Node) error {
+		return n.OBM.PowerCycle(force)
+	})
 }
 
 func (d *Daemon) SetNodeBootDev(label string, dev string, token *Token) error {
