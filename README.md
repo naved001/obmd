@@ -154,6 +154,15 @@ Notes:
   system may respond to.
 * If the node is powered off, this will turn it on.
 
+### Powering on a node
+
+`POST /node/{node_id}/power_on`
+
+Notes:
+
+* Powers on the node. If the node is already powered on, this will
+  have no effect.
+
 ### Powering off a node
 
 `POST /node/{node_id}/power_off`

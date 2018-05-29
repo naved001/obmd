@@ -19,7 +19,8 @@ var Driver driver.Driver = mockDriver{}
 type PowerAction string
 
 const (
-	Off         PowerAction = "off"
+	On          PowerAction = "on"
+	Off                     = "off"
 	ForceReboot             = "force-reboot"
 	SoftReboot              = "soft-reboot"
 	BootDevA                = "bootdev-a"
@@ -105,10 +106,16 @@ func (s *server) GetPowerStatus() (string, error) {
 	return "Mock Status", nil
 }
 
+func (s *server) PowerOn() error {
+	s.setPowerAction(On)
+	return nil
+}
+
 func (s *server) PowerOff() error {
 	s.setPowerAction(Off)
 	return nil
 }
+
 func (s *server) PowerCycle(force bool) error {
 	if force {
 		s.setPowerAction(ForceReboot)

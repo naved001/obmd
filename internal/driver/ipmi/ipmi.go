@@ -129,6 +129,11 @@ func (s *server) ipmitool(args ...string) (err error) {
 	return
 }
 
+// Power on the server.
+func (s *server) PowerOn() error {
+	return s.ipmitool("chassis", "power", "on")
+}
+
 // Power off the server.
 func (s *server) PowerOff() error {
 	return s.ipmitool("chassis", "power", "off")

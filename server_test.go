@@ -239,12 +239,20 @@ func TestPowerActions(t *testing.T) {
 			mock.Off,
 			requestSpec{"POST", "/node/somenode/power_off", ""},
 		},
+		// Power on the node, and make sure that the operation went through.
+		{
+			"power on",
+			token,
+			http.StatusOK,
+			mock.On,
+			requestSpec{"POST", "/node/somenode/power_on", ""},
+		},
 		// Try to reboot the node with a bad token.
 		{
 			"power cycle (invalid token)",
 			string(badToken),
 			http.StatusUnauthorized,
-			mock.Off, // should be unchanged.
+			mock.On, // should be unchanged.
 			requestSpec{
 				"POST", "/node/somenode/power_cycle", `{"force": false}`,
 			},
