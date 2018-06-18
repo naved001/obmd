@@ -16,10 +16,13 @@ A config file is needed, whose contents should look like:
 
 ```json
 {
-	"DBType":     "sqlite3",
-	"DBPath":     "./obmd.db",
-	"ListenAddr": ":8080",
-	"AdminToken": "44d5ebcb1aae23bfefc8dca8314797eb"
+	"DBType":     	"sqlite3",
+	"DBPath":     	"./obmd.db",
+	"ListenAddr": 	":8080",
+	"AdminToken": 	"44d5ebcb1aae23bfefc8dca8314797eb",
+	"WebProtocol": 	"https",
+	"TLSCert":	"server.crt",
+	"TLSKey":	"server.key"
 }
 ```
 
@@ -33,6 +36,9 @@ The admin token should be a (cryptographically randomly generated)
 running:
 
     ./console-service -gen-token
+
+The OBMd web protocol can be "http" or "https".  If https is chosen,
+the "TLSCert" and "TLSKey" fields must be filled in.
 
 By default, the server looks for the config file at `./config.json`, but
 the `-config` command line option can be used to override this.

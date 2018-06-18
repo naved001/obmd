@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,16 +22,23 @@ import (
 
 // Contents of the config file
 type Config struct {
-	DBType     string
-	DBPath     string
-	ListenAddr string
-	AdminToken Token
+	DBType      string
+	DBPath      string
+	ListenAddr  string
+	AdminToken  Token
+	WebProtocol string
+	TLSCert     string
+	TLSKey      string
 }
 
 var (
 	configPath = flag.String("config", "config.json", "Path to config file")
 	genToken   = flag.Bool("gen-token", false,
 		"Generate a random token, instead of starting the daemon.")
+)
+
+var (
+	ErrUnknownProtocol = errors.New("Web protocol neither http nor https.")
 )
 
 // Exit with an error message if err != nil.
@@ -74,5 +82,14 @@ func main() {
 	chkfatal(err)
 	srv := makeHandler(&config, NewDaemon(state))
 	http.Handle("/", srv)
-	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
+	if config.WebProtocol == "http" {
+		chkfatal(http.ListenAndServe(config.ListenAddr, nil))
+	} else if config.WebProtocol == "https" {
+		chkfatal(http.ListenAndServeTLS(config.ListenAddr,
+			config.TLSCert,
+			config.TLSKey,
+			nil))
+	} else {
+		chkfatal(ErrUnknownProtocol)
+	}
 }
