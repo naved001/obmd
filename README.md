@@ -20,7 +20,6 @@ A config file is needed, whose contents should look like:
 	"DBPath":     	"./obmd.db",
 	"ListenAddr": 	":8080",
 	"AdminToken": 	"44d5ebcb1aae23bfefc8dca8314797eb",
-	"WebProtocol": 	"https",
 	"TLSCert":	"server.crt",
 	"TLSKey":	"server.key"
 }
@@ -37,8 +36,11 @@ running:
 
     ./console-service -gen-token
 
-The OBMd web protocol can be "http" or "https".  If https is chosen,
-the "TLSCert" and "TLSKey" fields must be filled in.
+By default, OBMd listens for connections via https. While production
+environments should *never* change this, it can be convenient for
+development to make OBMd listen via plaintext http. To do this, add an
+option `"Insecure": true` in the config file, and remove the `TLSCert`
+and `TLSKey` options.
 
 By default, the server looks for the config file at `./config.json`, but
 the `-config` command line option can be used to override this.

@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -22,23 +21,19 @@ import (
 
 // Contents of the config file
 type Config struct {
-	DBType      string
-	DBPath      string
-	ListenAddr  string
-	AdminToken  Token
-	WebProtocol string
-	TLSCert     string
-	TLSKey      string
+	DBType     string
+	DBPath     string
+	ListenAddr string
+	AdminToken Token
+	Insecure   bool
+	TLSCert    string
+	TLSKey     string
 }
 
 var (
 	configPath = flag.String("config", "config.json", "Path to config file")
 	genToken   = flag.Bool("gen-token", false,
 		"Generate a random token, instead of starting the daemon.")
-)
-
-var (
-	ErrUnknownProtocol = errors.New("Web protocol neither http nor https.")
 )
 
 // Exit with an error message if err != nil.
@@ -82,14 +77,27 @@ func main() {
 	chkfatal(err)
 	srv := makeHandler(&config, NewDaemon(state))
 	http.Handle("/", srv)
-	if config.WebProtocol == "http" {
+
+	if config.Insecure {
+		if config.TLSCert != "" {
+			log.Fatal("Error: Do not specify TLS certificate file",
+				" when Insecure is true.")
+		}
+		if config.TLSKey != "" {
+			log.Fatal("Error: Do not specify TLS key file",
+				" when Insecure is true.")
+		}
 		chkfatal(http.ListenAndServe(config.ListenAddr, nil))
-	} else if config.WebProtocol == "https" {
+	} else {
+		if config.TLSCert == "" {
+			log.Fatal("Error: No TLS certificate file specified.")
+		}
+		if config.TLSKey == "" {
+			log.Fatal("Error: No TLS key file specified.")
+		}
 		chkfatal(http.ListenAndServeTLS(config.ListenAddr,
 			config.TLSCert,
 			config.TLSKey,
 			nil))
-	} else {
-		chkfatal(ErrUnknownProtocol)
 	}
 }
