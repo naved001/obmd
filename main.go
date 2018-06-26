@@ -25,6 +25,9 @@ type Config struct {
 	DBPath     string
 	ListenAddr string
 	AdminToken Token
+	Insecure   bool
+	TLSCert    string
+	TLSKey     string
 }
 
 var (
@@ -74,5 +77,27 @@ func main() {
 	chkfatal(err)
 	srv := makeHandler(&config, NewDaemon(state))
 	http.Handle("/", srv)
-	chkfatal(http.ListenAndServe(config.ListenAddr, nil))
+
+	if config.Insecure {
+		if config.TLSCert != "" {
+			log.Fatal("Error: Do not specify TLS certificate file",
+				" when Insecure is true.")
+		}
+		if config.TLSKey != "" {
+			log.Fatal("Error: Do not specify TLS key file",
+				" when Insecure is true.")
+		}
+		chkfatal(http.ListenAndServe(config.ListenAddr, nil))
+	} else {
+		if config.TLSCert == "" {
+			log.Fatal("Error: No TLS certificate file specified.")
+		}
+		if config.TLSKey == "" {
+			log.Fatal("Error: No TLS key file specified.")
+		}
+		chkfatal(http.ListenAndServeTLS(config.ListenAddr,
+			config.TLSCert,
+			config.TLSKey,
+			nil))
+	}
 }

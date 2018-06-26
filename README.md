@@ -16,10 +16,12 @@ A config file is needed, whose contents should look like:
 
 ```json
 {
-	"DBType":     "sqlite3",
-	"DBPath":     "./obmd.db",
-	"ListenAddr": ":8080",
-	"AdminToken": "44d5ebcb1aae23bfefc8dca8314797eb"
+	"DBType":     	"sqlite3",
+	"DBPath":     	"./obmd.db",
+	"ListenAddr": 	":8080",
+	"AdminToken": 	"44d5ebcb1aae23bfefc8dca8314797eb",
+	"TLSCert":	"server.crt",
+	"TLSKey":	"server.key"
 }
 ```
 
@@ -33,6 +35,12 @@ The admin token should be a (cryptographically randomly generated)
 running:
 
     ./console-service -gen-token
+
+By default, OBMd listens for connections via https. While production
+environments should *never* change this, it can be convenient for
+development to make OBMd listen via plaintext http. To do this, add an
+option `"Insecure": true` in the config file, and remove the `TLSCert`
+and `TLSKey` options.
 
 By default, the server looks for the config file at `./config.json`, but
 the `-config` command line option can be used to override this.
