@@ -152,7 +152,7 @@ func makeHandler(config *Config, daemon *Daemon) http.Handler {
 				go func() {
 					// Close the obm connection if the client closes the http
 					// connection. We can't just defer conn.Close(), because if
-					// Read blocks, the caller we won't find out that the http
+					// Read blocks, the caller won't find out that the http
 					// connection is closed until it returns (and then calls
 					// Write, which returns an error).
 					<-req.Context().Done()
