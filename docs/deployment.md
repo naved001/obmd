@@ -33,6 +33,18 @@ the same host. However, if the postgres server is on a different system, it is
 You can use [Let's Encrypt](https://letsencrypt.org/)  to generate free certificates.
 [Certbot](https://certbot.eff.org/) makes this process easier.
 
+Sample config file:
+```
+{
+	"DBType":     	"postgres",
+	"DBPath":     	"host=localhost port=5432 user=hil password=password dbname=obmd sslmode=disable",
+	"ListenAddr": 	"IPADDR:8080",
+	"AdminToken": 	"12345678912345678912345678912345",
+	"TLSCert":	"server.crt",
+	"TLSKey":	"server.key"
+}
+```
+
 ## Running obmd as a service using systemd
 
 1. Copy the systemd service file `scripts/obmd.service` to `/usr/lib/systemd/system/`
@@ -51,3 +63,36 @@ $ systemctl start obmd.service
 3. Check the status to make sure it's running.
 `$ systemctl status obmd.service -l`
 
+## Running OBMd with Apache
+
+1. Make sure that your Apache server is running with TLS.
+
+2. In the obmd config file at `/etc/obmd/config.json`, enable obmd to run on
+localhost on some port, with Insecure option set to true.
+
+Sample config file:
+```
+{
+	"DBType":     	"postgres",
+	"DBPath":     	"host=localhost port=5432 user=hil password=password dbname=obmd sslmode=disable",
+	"ListenAddr": 	"localhost:8080",
+	"AdminToken": 	"12345678912345678912345678912345",
+	"Insecure":	true
+}
+```
+
+3. Create a configuration file `/etc/httpd/conf.d/obmd.conf` that tells apache
+how to act as a reverse proxy for obmd.
+
+```
+ProxyPass "/obmd" "http://localhost:8080"
+ProxyPassReverse "/obmd" "http://localhost:8080"
+```
+
+This forwards any traffic coming to `https://example.com/obmd` to obmd.
+Everything else is handled by the default server (which would be hil).
+
+4. Restart Apache `systemctl httpd restart`.
+
+4. When you register nodes in HIL, the OBMD URI will look like
+`https://example.com/obmd/node/<node-name>`.
