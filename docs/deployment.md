@@ -8,11 +8,11 @@
 
 Alternatively, you can clone the source code and build the binary yourself.
 
-2. Make it executable and place it in `/bin`.
+2. Make it executable and place it in `/usr/local/bin`.
 
 ```
 $ sudo chmod +x obmd
-$ sudo mv obmd /bin/
+$ sudo mv obmd /usr/local/bin/
 ```
 
 3. If you decide to move obmd to a different directory then make sure to update
@@ -21,6 +21,8 @@ the obmd service file.
 ## The configuration file
 
 1. Create a configuration file for obmd `/etc/obmd/config.json`.
+See the [README](https://github.com/CCI-MOC/obmd/blob/master/README.md) for
+complete documentation about the configuration file.
 
 2. Generate an admin token by running `obmd -gen-token`.
 
@@ -65,6 +67,11 @@ $ systemctl start obmd.service
 
 ## Running OBMd with Apache
 
+OBMd is a go web app and is perfectly capable of being an internet-facing web server.
+However, if you want to run multiple virtual servers on the same machine
+like running HIL and OBMd together, you can use Apache as an HTTP proxy. This also means
+you need to configure only your Apache server with TLS.
+
 1. Make sure that your Apache server is running with TLS.
 
 2. In the obmd config file at `/etc/obmd/config.json`, enable obmd to run on
@@ -75,7 +82,7 @@ Sample config file:
 {
 	"DBType":     	"postgres",
 	"DBPath":     	"host=localhost port=5432 user=hil password=password dbname=obmd sslmode=disable",
-	"ListenAddr": 	"localhost:8080",
+	"ListenAddr": 	"127.0.0.1:8080",
 	"AdminToken": 	"12345678912345678912345678912345",
 	"Insecure":	true
 }

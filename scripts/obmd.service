@@ -5,9 +5,9 @@ After=postgresql.service
 
 [Service]
 Type=simple
-User=hil
+User=obmd-user
 WorkingDirectory=/etc/obmd/
-ExecStart=/bin/obmd
+ExecStart=/usr/local/bin/obmd
 Restart=on-failure
 RestartSec=5s
 
